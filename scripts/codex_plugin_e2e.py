@@ -120,7 +120,19 @@ def parse_install_root(output: str) -> Path:
 
 
 def codex_exec_args(output_file: Path, cwd: Path, prompt: str) -> list[str]:
-    """Return the common Codex exec invocation used by the e2e."""
+    """Return the common Codex exec invocation used by the e2e.
+
+    Codex >=0.135 defaults ``codex exec`` to the read-only sandbox, which blocks
+    the deterministic enrichment writes (raw YAML in the temp dir, config
+    bootstrap, frontmatter writeback, index rebuild inside the installed plugin
+    cache). Run under ``workspace-write`` and grant the two roots outside the
+    primary workspace (``-C cwd``): the temp dir (raw YAML) and the Codex plugin
+    cache (installed plugin root). This stays well short of full disk access.
+    """
+    writable_roots = [tempfile.gettempdir(), str(Path.home() / ".codex/plugins")]
+    add_dir_args: list[str] = []
+    for root in writable_roots:
+        add_dir_args += ["--add-dir", root]
     return [
         "codex",
         "exec",
@@ -129,6 +141,9 @@ def codex_exec_args(output_file: Path, cwd: Path, prompt: str) -> list[str]:
         "--enable",
         "hooks",
         "--dangerously-bypass-hook-trust",
+        "--sandbox",
+        "workspace-write",
+        *add_dir_args,
         "-c",
         'forced_login_method="chatgpt"',
         "-c",
