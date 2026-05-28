@@ -1,0 +1,93 @@
+# signal-loom sources — v1 supported types: rss, youtube, listing
+# Each key is an internal slug; name: overrides the display name.
+# ── Replace everything above with YOUR domain. Example (climate): ──
+# (see commented-out block at the bottom of this file)
+
+simon_willison:
+  name: Simon Willison's Weblog
+  type: rss
+  feed_url: https://simonw.substack.com/feed
+  output_dir: content/simon-willison
+  tags:
+    - ai
+    - engineering
+    - llm
+  perspective: practitioner
+  scrape_limit: 10
+  scrape_full_content: false
+  fetch_method: auto
+  enabled: true
+
+import_ai_filtered:
+  name: Import AI (LLM filter)
+  type: rss
+  feed_url: https://importai.substack.com/feed
+  output_dir: content/import-ai
+  tags:
+    - ai
+    - research
+  perspective: researcher
+  scrape_limit: 8
+  scrape_full_content: false
+  fetch_method: auto
+  keyword_filter:
+    mode: any
+    include:
+      - large language model
+      - reinforcement learning
+  enabled: true
+
+latent_space_yt:
+  name: Latent Space (YouTube)
+  type: youtube
+  feed_url: https://www.youtube.com/@LatentSpacePod
+  output_dir: content/latent-space-yt
+  tags:
+    - ai
+    - podcast
+    - video
+  perspective: practitioner
+  scrape_limit: 5
+  scrape_full_content: false
+  fetch_method: auto
+  enabled: true
+
+ai_daily_brief_listing:
+  name: AI Daily Brief (episode listing)
+  type: listing
+  feed_url: https://www.aidailybriefing.com/episodes/
+  output_dir: content/ai-daily-brief
+  tags:
+    - ai
+    - news
+  perspective: journalist
+  scrape_limit: 10
+  scrape_full_content: false
+  fetch_method: browser
+  enabled: true
+
+# ── Replace everything above with YOUR domain. Example (climate): ──
+#
+# carbon_brief_rss:
+#   name: Carbon Brief
+#   type: rss
+#   feed_url: https://www.carbonbrief.org/feed/
+#   output_dir: content/carbon-brief
+#   tags:
+#     - climate
+#     - policy
+#   perspective: journalist
+#   scrape_limit: 10
+#   enabled: true
+#
+# climate_pod_listing:
+#   name: My Climate Podcast (listing)
+#   type: listing
+#   feed_url: https://example.com/climate-podcast/episodes/
+#   output_dir: content/climate-pod
+#   tags:
+#     - climate
+#     - podcast
+#   fetch_method: browser
+#   scrape_limit: 8
+#   enabled: true

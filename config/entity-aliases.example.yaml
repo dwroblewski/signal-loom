@@ -1,0 +1,10 @@
+# Entity alias mapping: variant → canonical
+# When the enrichment model uses a variant name, it is normalised to the
+# canonical form at index time, enabling reliable cross-source clustering.
+# Format: "Variant Name": "Canonical Name"
+
+Anthropic PBC: Anthropic
+OpenAI Inc: OpenAI
+Google DeepMind: DeepMind
+Meta AI: Meta
+Microsoft Research: Microsoft

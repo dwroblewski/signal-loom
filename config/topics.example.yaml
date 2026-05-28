@@ -1,0 +1,15 @@
+# Your controlled topic vocabulary — replace with YOUR domain's topics.
+# topics.primary on each enriched item must come from this list.
+# Keep entries lowercase, singular where possible, and human-readable.
+# This is the mechanism that makes cross-source clustering possible.
+
+- ai agents
+- model releases
+- ai policy
+- ai safety
+- enterprise ai
+- ai research
+- open source models
+- ai tooling
+- multimodal ai
+- ai investment

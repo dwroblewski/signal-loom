@@ -1,0 +1,8 @@
+# signal-loom global settings
+# Copy to signal-loom.yaml and adjust for your environment.
+
+enrichment_model: claude-sonnet-4-6
+content_dir: content
+index_path: index.json
+topics_path: config/topics.yaml
+aliases_path: config/entity-aliases.yaml
