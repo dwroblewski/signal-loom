@@ -1,8 +1,14 @@
 # signal-loom global settings
 # Copy to signal-loom.yaml and adjust for your environment.
+# On first plugin session, these files are auto-created from *.example.yaml.
+# Set SIGNAL_LOOM_CONFIG=/stable/path/signal-loom.yaml for durable config
+# (a plugin update may overwrite the plugin directory).
 
 enrichment_model: claude-sonnet-4-6
-content_dir: content
-index_path: index.json
-topics_path: config/topics.yaml
-aliases_path: config/entity-aliases.yaml
+# Paths are resolved relative to this config file's directory.
+# With this file at config/signal-loom.yaml, sibling files are just filenames:
+content_dir: ../content
+index_path: ../index.json
+sources_path: sources.yaml
+topics_path: topics.yaml
+aliases_path: entity-aliases.yaml

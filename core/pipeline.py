@@ -33,14 +33,24 @@ Test seams
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
 
 import frontmatter
 
-from core.config import load_settings, load_sources, load_vocabulary, load_aliases
+from core.config import (
+    ConfigError,
+    ensure_configs,
+    load_aliases,
+    load_settings,
+    load_sources,
+    load_vocabulary,
+    resolve_config_path,
+)
 from core import enrichment_writeback, index as index_mod
 from core import scrape as scrape_mod
 
@@ -135,6 +145,16 @@ def _needs_enrichment(path: Path) -> bool:
         return True
 
 
+def _append_failed_queue(path: Path, errors: list[str]) -> None:
+    """Append a failed enrichment entry to failed-enrichments.jsonl."""
+    queue_path = enrichment_writeback._FAILED_QUEUE
+    try:
+        with queue_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"path": str(path), "errors": errors}) + "\n")
+    except OSError as exc:
+        logger.warning("could not write failed-enrichments queue: %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -155,9 +175,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument(
         "--config",
-        default="config/signal-loom.yaml",
+        default=None,
         metavar="PATH",
-        help="Path to signal-loom settings YAML (default: config/signal-loom.yaml).",
+        help="Path to signal-loom settings YAML (default: auto-discovered).",
     )
     parser.add_argument(
         "--once",
@@ -172,7 +192,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Report what would be done without writing any files.",
+        help=(
+            "Preview what would be scraped without writing any files. "
+            "Fetches each enabled source's feed and reports ~N items per source."
+        ),
+    )
+    parser.add_argument(
+        "--max-enrich",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Cap the number of files enriched in one run (0 = unlimited). "
+            "Deferred files remain in content/ for the next run."
+        ),
     )
     # Hidden test seams — prefixed with underscore to signal internal use
     parser.add_argument(
@@ -195,13 +228,24 @@ def main(argv: Optional[list[str]] = None) -> int:
     # ------------------------------------------------------------------ #
     # 1. Load configuration                                                #
     # ------------------------------------------------------------------ #
+    config_path = resolve_config_path(args.config)
+    ensure_configs(config_path.parent)
+
+    if not config_path.exists():
+        print(
+            f"config not found at {config_path}; "
+            f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
-        settings = load_settings(args.config)
+        settings = load_settings(config_path)
     except FileNotFoundError as exc:
         logger.error("config file not found: %s", exc)
         return 1
     except Exception as exc:
-        logger.error("failed to load settings from %s: %s", args.config, exc)
+        logger.error("failed to load settings from %s: %s", config_path, exc)
         return 1
 
     try:
@@ -222,12 +266,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.error("failed to load aliases from %s: %s", settings.aliases_path, exc)
         return 1
 
+    # #7 empty vocab fail-fast — check BEFORE any scraping/enriching
+    if not vocabulary:
+        print(
+            f"config/topics.yaml has no topics — add at least one",
+            file=sys.stderr,
+        )
+        return 1
+
     logger.info(
         "pipeline: %d sources, %d topics, %d aliases",
         len(sources),
         len(vocabulary),
         len(aliases),
     )
+
+    # #9 missing API key preflight — check before constructing ApiEnricher
+    if not args.no_enrich and not args.dry_run and args.inject_enricher != "fake":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            print(
+                "ANTHROPIC_API_KEY not set — export it, or re-run with --no-enrich",
+                file=sys.stderr,
+            )
+            return 1
 
     # ------------------------------------------------------------------ #
     # 2. Build fetch injections                                            #
@@ -240,15 +301,40 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.debug("pipeline: using fixture fetch seam")
 
     # ------------------------------------------------------------------ #
-    # 3. Scrape each source                                                #
+    # 3. Scrape each source  (or dry-run preview)                          #
     # ------------------------------------------------------------------ #
     all_new_files: list[Path] = []
+    scrape_errors = 0
+
+    if args.dry_run:
+        # Real dry-run: fetch each feed and count items without writing anything
+        print("dry-run preview — no files will be written\n")
+        total_items = 0
+        for src in sources:
+            logger.info("dry-run: checking source: %s (%s)", src.name, src.type)
+            try:
+                if src.type == "rss":
+                    _feed_fn = fetch_feed_fn or scrape_mod._default_fetch_feed
+                    parsed = _feed_fn(src.feed_url)
+                    entries = getattr(parsed, "entries", []) or []
+                    n = min(len(entries), src.scrape_limit)
+                    print(f"  {src.name} ({src.type}): would scrape ~{n} item(s)")
+                    total_items += n
+                elif src.type == "youtube":
+                    print(f"  {src.name} ({src.type}): would scrape up to {src.scrape_limit} item(s) (feed fetch skipped in dry-run)")
+                    total_items += src.scrape_limit
+                elif src.type == "listing":
+                    print(f"  {src.name} ({src.type}): would scrape up to {src.scrape_limit} item(s) (feed fetch skipped in dry-run)")
+                    total_items += src.scrape_limit
+                else:
+                    print(f"  {src.name}: unsupported type '{src.type}' — would skip")
+            except Exception as exc:
+                print(f"  {src.name}: feed fetch error — {exc}")
+        print(f"\ndry-run summary: {len(sources)} source(s), ~{total_items} total item(s) would be scraped")
+        return 0
 
     for src in sources:
         logger.info("scraping source: %s (%s)", src.name, src.type)
-        if args.dry_run:
-            logger.info("dry-run: skipping scrape for %s", src.name)
-            continue
         try:
             new_files = scrape_mod.run_source(
                 src,
@@ -259,6 +345,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             all_new_files.extend(new_files)
         except Exception as exc:
             logger.warning("scrape failed for source %s: %s", src.name, exc)
+            scrape_errors += 1
             continue
 
     logger.info("pipeline: %d total new file(s) scraped", len(all_new_files))
@@ -266,7 +353,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     # ------------------------------------------------------------------ #
     # 4. Enrich new files                                                  #
     # ------------------------------------------------------------------ #
-    if not args.no_enrich and not args.dry_run:
+    enrich_total = 0
+    enrich_succeeded = 0
+    failed_queue_written = False
+
+    if not args.no_enrich:
         # Determine which files need enrichment: ALL *.md under content_dir
         # that lack enriched: true, not just files scraped this run.
         # This drains the backlog of files scraped with --no-enrich or that
@@ -277,9 +368,37 @@ def main(argv: Optional[list[str]] = None) -> int:
             f for f in sorted(content_dir_path.rglob("*.md"))
             if _needs_enrichment(f)
         ]
-        logger.info("pipeline: %d file(s) to enrich", len(to_enrich))
+        enrich_total = len(to_enrich)
+        logger.info("pipeline: %d file(s) to enrich", enrich_total)
+
+        # Apply --max-enrich cap
+        deferred_count = 0
+        if args.max_enrich > 0 and len(to_enrich) > args.max_enrich:
+            deferred_count = len(to_enrich) - args.max_enrich
+            to_enrich = to_enrich[: args.max_enrich]
+            logger.info(
+                "pipeline: --max-enrich %d cap applied; deferring %d file(s)",
+                args.max_enrich,
+                deferred_count,
+            )
 
         if to_enrich:
+            # Log cost gate info
+            model = settings.enrichment_model
+            # Rough cost estimates per article (measured 2026-05-27)
+            _cost_map = {
+                "claude-haiku-4-5": 0.011,
+                "claude-sonnet-4-6": 0.032,
+                "claude-opus-4-7": 0.16,
+            }
+            est_cost = _cost_map.get(model, 0.032)
+            logger.info(
+                "enriching %d file(s) via %s (~$%.3f/article, see README cost table)",
+                len(to_enrich),
+                model,
+                est_cost,
+            )
+
             # Build enricher — real or fake seam
             if args.inject_enricher == "fake":
                 enricher = _FakeEnricher(vocabulary)
@@ -288,7 +407,6 @@ def main(argv: Optional[list[str]] = None) -> int:
                 from core.enrich import ApiEnricher
                 enricher = ApiEnricher(settings.enrichment_model)
 
-            succeeded = 0
             for path in to_enrich:
                 try:
                     post = frontmatter.load(str(path))
@@ -302,7 +420,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                         retries=2,
                     )
                     if result.ok:
-                        succeeded += 1
+                        enrich_succeeded += 1
                         logger.debug("enriched: %s", path.name)
                     else:
                         logger.warning(
@@ -310,28 +428,61 @@ def main(argv: Optional[list[str]] = None) -> int:
                             path.name,
                             result.errors,
                         )
+                        # #13 append to failed-enrichments.jsonl queue
+                        _append_failed_queue(path, result.errors)
+                        failed_queue_written = True
                 except Exception as exc:
                     logger.warning("enrichment error for %s: %s", path, exc)
+                    _append_failed_queue(path, [str(exc)])
+                    failed_queue_written = True
 
             logger.info(
                 "pipeline: enrichment done — %d/%d succeeded",
-                succeeded,
+                enrich_succeeded,
                 len(to_enrich),
             )
+
+        if deferred_count:
+            logger.info(
+                "pipeline: %d file(s) deferred (--max-enrich cap); re-run to continue",
+                deferred_count,
+            )
+
+    if failed_queue_written:
+        logger.info(
+            "pipeline: some enrichments failed — re-run queue written to %s",
+            enrichment_writeback._FAILED_QUEUE,
+        )
 
     # ------------------------------------------------------------------ #
     # 5. Rebuild index                                                     #
     # ------------------------------------------------------------------ #
-    if not args.dry_run:
-        try:
-            result = index_mod.build_index(settings.content_dir, settings.index_path)
-            n = len(result.get("entries", []))
-            logger.info("pipeline: index rebuilt — %d enriched entries", n)
-        except Exception as exc:
-            logger.error("index build failed: %s", exc)
-            return 1
+    try:
+        result = index_mod.build_index(settings.content_dir, settings.index_path)
+        n = len(result.get("entries", []))
+        logger.info("pipeline: index rebuilt — %d enriched entries", n)
+    except Exception as exc:
+        logger.error("index build failed: %s", exc)
+        return 1
 
     logger.info("pipeline: pass complete")
+
+    # ------------------------------------------------------------------ #
+    # 6. Exit code                                                         #
+    # ------------------------------------------------------------------ #
+    # Return nonzero if every source failed to scrape
+    if sources and scrape_errors == len(sources):
+        logger.error("pipeline: all %d source(s) failed to scrape", len(sources))
+        return 1
+
+    # Return nonzero if enrichment was attempted and every file failed
+    if not args.no_enrich and enrich_total > 0 and enrich_succeeded == 0:
+        # Only fail if we actually tried to enrich (to_enrich was non-empty)
+        # and not a case where deferred cap reduced to_enrich to zero
+        if enrich_total > 0:
+            logger.error("pipeline: enrichment attempted but 0/%d succeeded", enrich_total)
+            return 1
+
     return 0
 
 

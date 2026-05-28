@@ -302,8 +302,8 @@ def main(argv: list[str] | None = None) -> int:
     apply_p.add_argument("path", help="Markdown file to update")
     apply_p.add_argument(
         "--config",
-        default="config/signal-loom.yaml",
-        help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+        default=None,
+        help="Path to signal-loom.yaml (default: auto-discovered)",
     )
     apply_p.add_argument(
         "--raw-file",
@@ -328,17 +328,42 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raw_input = sys.stdin.read()
 
-    # Load vocab and aliases via config; fall back to empty on missing files.
-    _vocab: set[str] = set()
-    _aliases: dict[str, str] = {}
-    try:
-        from core.config import load_settings, load_vocabulary, load_aliases
+    # Load vocab and aliases via config — fail hard on config errors (#4).
+    from core.config import (
+        ConfigError,
+        ensure_configs,
+        load_aliases,
+        load_settings,
+        load_vocabulary,
+        resolve_config_path,
+    )
 
-        settings = load_settings(args.config)
+    config_path = resolve_config_path(args.config)
+    ensure_configs(config_path.parent)
+
+    if not config_path.exists():
+        print(
+            f"config not found at {config_path}; "
+            f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        settings = load_settings(config_path)
         _vocab = load_vocabulary(settings.topics_path)
         _aliases = load_aliases(settings.aliases_path)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        print(f"error loading config from {config_path}: {exc}", file=sys.stderr)
+        return 1
+
+    # Empty vocab fail-fast (#7)
+    if not _vocab:
+        print(
+            "config/topics.yaml has no topics — add at least one",
+            file=sys.stderr,
+        )
+        return 1
 
     res = apply(target, raw_input, vocabulary=_vocab, aliases=_aliases)
     if res.ok:

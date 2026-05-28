@@ -678,6 +678,42 @@ def _default_fetch_listing(url: str) -> Optional[str]:
     return fetch_html_with_browser(url)
 
 
+def _direct_fetch_listing(url: str) -> Optional[str]:
+    """Listing page fetcher using direct httpx GET (no browser required).
+
+    Used when fetch_method is 'auto' or unset — tries a direct HTTP request
+    first (fast, no extra deps).  Returns raw HTML as a string, or None on
+    failure.
+    """
+    import httpx
+    from core import fetch as _fetch_mod
+
+    try:
+        _fetch_mod._assert_safe_url(url)
+    except _fetch_mod.BlockedURLError as exc:
+        logger.warning("_direct_fetch_listing blocked URL %s: %s", url, exc)
+        raise
+
+    try:
+        with httpx.Client(
+            follow_redirects=True,
+            timeout=30,
+            headers={"User-Agent": "Mozilla/5.0 (signal-loom)"},
+        ) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            if len(resp.content) > _fetch_mod._MAX_RESPONSE_BYTES:
+                logger.warning(
+                    "_direct_fetch_listing: response for %s exceeds 10 MB — skipping",
+                    url,
+                )
+                return None
+            return resp.text
+    except Exception as exc:
+        logger.debug("_direct_fetch_listing: failed for %s: %s", url, exc)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -704,7 +740,25 @@ def run_source(
     _feed = fetch_feed or _default_fetch_feed
     _article = fetch_article or _default_fetch_article
     _youtube = fetch_youtube or _default_fetch_youtube
-    _listing = fetch_listing or _default_fetch_listing
+
+    # Resolve listing fetcher based on fetch_method:
+    # - "browser"       → always use Playwright (requires --extra browser)
+    # - "auto" / unset  → try direct httpx first; fall back to browser if empty
+    # - "auto-no-browser" → direct httpx only, no browser fallback
+    if fetch_listing is not None:
+        _listing = fetch_listing
+    elif src.fetch_method == "browser":
+        _listing = _default_fetch_listing
+    else:
+        # "auto" or unset: try direct first, browser fallback (unless auto-no-browser)
+        def _listing(url: str) -> Optional[str]:  # type: ignore[misc]
+            html = _direct_fetch_listing(url)
+            if html:
+                return html
+            if src.fetch_method == "auto-no-browser":
+                return None
+            # Fall back to browser
+            return _default_fetch_listing(url)
 
     if src.type == "rss":
         return _run_rss(src, _feed, _article)

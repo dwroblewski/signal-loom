@@ -13,10 +13,16 @@ clear pointer so users know what to expect.
 
 from __future__ import annotations
 
+import logging
+import os
+import shutil
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # v1 supported types and explicitly deferred v1.1 types
@@ -24,6 +30,12 @@ import yaml
 
 _V1_TYPES: frozenset[str] = frozenset({"rss", "youtube", "listing"})
 _V11_TYPES: frozenset[str] = frozenset({"podcast", "whisper", "substack-full"})
+
+# ---------------------------------------------------------------------------
+# Package-level config directory (where *.example.yaml files live)
+# ---------------------------------------------------------------------------
+
+PACKAGE_CONFIG_DIR: Path = Path(__file__).resolve().parent.parent / "config"
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +83,70 @@ class Settings:
 
 
 # ---------------------------------------------------------------------------
+# Config discovery and auto-bootstrap
+# ---------------------------------------------------------------------------
+
+
+def resolve_config_path(explicit: str | None) -> Path:
+    """Resolve the path to signal-loom.yaml.
+
+    Resolution order (first existing wins):
+    1. *explicit* — if provided, return it as-is (user override).
+    2. ``$SIGNAL_LOOM_CONFIG`` env var (full path to signal-loom.yaml).
+    3. ``Path.cwd() / "config/signal-loom.yaml"`` — repo / headless install.
+    4. ``PACKAGE_CONFIG_DIR / "signal-loom.yaml"`` — plugin install beside code.
+
+    If none of 2-4 exist, returns the PACKAGE_CONFIG_DIR path so that
+    ``ensure_configs`` can create it from the example there.
+    """
+    if explicit is not None:
+        return Path(explicit)
+
+    env_path = os.environ.get("SIGNAL_LOOM_CONFIG")
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
+
+    cwd_path = Path.cwd() / "config" / "signal-loom.yaml"
+    if cwd_path.exists():
+        return cwd_path
+
+    pkg_path = PACKAGE_CONFIG_DIR / "signal-loom.yaml"
+    if pkg_path.exists():
+        return pkg_path
+
+    # None found — return the package dir path so ensure_configs can bootstrap there.
+    return PACKAGE_CONFIG_DIR / "signal-loom.yaml"
+
+
+def ensure_configs(config_dir: Path) -> list[str]:
+    """Copy missing *.yaml configs from *.example.yaml in *config_dir*.
+
+    For each base in ["signal-loom", "sources", "topics", "entity-aliases"]:
+    - If ``<base>.yaml`` is missing but ``<base>.example.yaml`` exists, copy
+      example → yaml and log the action.
+
+    Returns a list of created file names (basenames only).
+    """
+    bases = ["signal-loom", "sources", "topics", "entity-aliases"]
+    created: list[str] = []
+
+    for base in bases:
+        target = config_dir / f"{base}.yaml"
+        example = config_dir / f"{base}.example.yaml"
+        if not target.exists() and example.exists():
+            shutil.copy2(example, target)
+            created.append(f"{base}.yaml")
+            logger.info(
+                "created %s from example — edit it to add your sources/topics",
+                target,
+            )
+
+    return created
+
+
+# ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
 
@@ -81,6 +157,7 @@ def load_sources(path: str) -> list[SourceConfig]:
     Only enabled sources are returned.  Raises ConfigError for:
     * v1.1 types (podcast, whisper, substack-full) — deferred, not supported yet
     * any other unrecognised type
+    * invalid keyword_filter.mode (must be "any" or "all")
     """
     with open(path) as fh:
         raw: dict[str, Any] = yaml.safe_load(fh) or {}
@@ -107,18 +184,27 @@ def load_sources(path: str) -> list[SourceConfig]:
         # Containment check: reject absolute paths and path-traversal segments.
         # This guard applies only to sources loaded from YAML; programmatic
         # SourceConfig(...) construction is unaffected.
-        import os as _os
-        if _os.path.isabs(output_dir_raw):
+        if os.path.isabs(output_dir_raw):
             raise ConfigError(
                 f"source '{key}': output_dir '{output_dir_raw}' must be a relative path, "
                 "not an absolute path."
             )
         # Normalise to detect '..' after joining (e.g. "a/../../../etc")
-        _normalised = _os.path.normpath(output_dir_raw) if output_dir_raw else ""
+        _normalised = os.path.normpath(output_dir_raw) if output_dir_raw else ""
         if any(part == ".." for part in _normalised.replace("\\", "/").split("/")):
             raise ConfigError(
                 f"source '{key}': output_dir '{output_dir_raw}' must not contain '..' segments."
             )
+
+        # Validate keyword_filter.mode if present
+        kf = data.get("keyword_filter") or None
+        if kf is not None:
+            mode = kf.get("mode", "any")
+            if mode not in ("any", "all"):
+                raise ConfigError(
+                    f"source '{key}': keyword_filter.mode '{mode}' is invalid — "
+                    "must be 'any' or 'all'"
+                )
 
         src = SourceConfig(
             name=data.get("name", key),
@@ -130,7 +216,7 @@ def load_sources(path: str) -> list[SourceConfig]:
             scrape_limit=int(data.get("scrape_limit", 10)),
             scrape_full_content=bool(data.get("scrape_full_content", False)),
             fetch_method=str(data.get("fetch_method", "auto")),
-            keyword_filter=data.get("keyword_filter") or None,
+            keyword_filter=kf,
             listing_link_pattern=data.get("listing_link_pattern") or None,
             enabled=bool(data.get("enabled", True)),
         )
@@ -141,18 +227,35 @@ def load_sources(path: str) -> list[SourceConfig]:
     return sources
 
 
-def load_settings(path: str) -> Settings:
-    """Parse *path* into a Settings object, applying defaults for absent keys."""
+def load_settings(path: str | Path) -> Settings:
+    """Parse *path* into a Settings object, applying defaults for absent keys.
+
+    All relative paths (content_dir, index_path, topics_path, aliases_path,
+    sources_path) are resolved relative to the config file's parent directory
+    so that a plugin install keeps its content/index beside the config file,
+    regardless of the user's cwd.
+    """
+    path = Path(path)
+    config_dir = path.parent
+
     with open(path) as fh:
         raw: dict[str, Any] = yaml.safe_load(fh) or {}
 
+    def _resolve(val: str, default: str) -> str:
+        """Return *val* (or *default*) resolved relative to config_dir if relative."""
+        v = val if val is not None else default
+        p = Path(v)
+        if not p.is_absolute():
+            return str(config_dir / p)
+        return v
+
     return Settings(
         enrichment_model=raw.get("enrichment_model", "claude-sonnet-4-6"),
-        content_dir=raw.get("content_dir", "content"),
-        index_path=raw.get("index_path", "index.json"),
-        topics_path=raw.get("topics_path", "config/topics.yaml"),
-        aliases_path=raw.get("aliases_path", "config/entity-aliases.yaml"),
-        sources_path=raw.get("sources_path", "config/sources.yaml"),
+        content_dir=_resolve(raw.get("content_dir"), "content"),
+        index_path=_resolve(raw.get("index_path"), "index.json"),
+        topics_path=_resolve(raw.get("topics_path"), "config/topics.yaml"),
+        aliases_path=_resolve(raw.get("aliases_path"), "config/entity-aliases.yaml"),
+        sources_path=_resolve(raw.get("sources_path"), "config/sources.yaml"),
     )
 
 
@@ -202,8 +305,9 @@ def load_aliases(path: str) -> dict[str, str]:
 def main(argv: list[str] | None = None) -> int:
     """Entry point: ``python -m core.config --print <field>``.
 
-    Loads settings from ``--config`` (default ``config/signal-loom.yaml``)
-    and prints the value of the named Settings field to stdout.
+    Loads settings from ``--config`` (default: auto-discovered via
+    resolve_config_path) and prints the value of the named Settings field
+    to stdout.
 
     Exits 0 on success, 1 on error.
     """
@@ -217,13 +321,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--print", dest="field", required=True, help="Settings field to print")
     parser.add_argument(
         "--config",
-        default="config/signal-loom.yaml",
-        help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+        default=None,
+        help="Path to signal-loom.yaml (default: auto-discovered)",
     )
     args = parser.parse_args(argv)
 
+    config_path = resolve_config_path(args.config)
+    ensure_configs(config_path.parent)
+
+    if not config_path.exists():
+        print(
+            f"config not found at {config_path}; "
+            f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
-        settings = load_settings(args.config)
+        settings = load_settings(config_path)
     except Exception as exc:  # noqa: BLE001
         print(f"error loading config: {exc}", file=sys.stderr)
         return 1

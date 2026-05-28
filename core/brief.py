@@ -248,16 +248,23 @@ def _parse_since(value: str) -> str:
     return value  # assume ISO date, let query.window validate
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> int:
     """CLI: python -m core.brief [options]"""
+    from core.config import resolve_config_path, ensure_configs, load_settings
+
     parser = argparse.ArgumentParser(
         prog="core.brief",
         description="Build a grouped markdown digest from the signal-loom index.",
     )
     parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to signal-loom.yaml (default: auto-discovered)",
+    )
+    parser.add_argument(
         "--index",
-        default="index.json",
-        help="Path to index.json (default: index.json)",
+        default=None,
+        help="Path to index.json (default: resolved from config)",
     )
     parser.add_argument(
         "--since",
@@ -283,16 +290,50 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
+    # Resolve the index path: --index flag > config-derived > fallback "index.json"
+    index_path_str = args.index
+    if index_path_str is None:
+        config_path = resolve_config_path(args.config)
+        ensure_configs(config_path.parent)
+        if config_path.exists():
+            try:
+                settings = load_settings(config_path)
+                index_path_str = settings.index_path
+            except Exception:
+                index_path_str = "index.json"
+        else:
+            index_path_str = "index.json"
+
+    # Friendly error if the index file doesn't exist
+    index_path = Path(index_path_str)
+    if not index_path.exists():
+        print(
+            f"index.json not found at {index_path} — "
+            f"run the pipeline first (/pipeline or python -m core.pipeline)",
+            file=sys.stderr,
+        )
+        return 1
+
     since = _parse_since(args.since) if args.since else None
-    md = build(
-        args.index,
-        since=since,
-        until=args.until,
-        verify=args.verify,
-        limit=args.limit,
-    )
+    try:
+        md = build(
+            index_path_str,
+            since=since,
+            until=args.until,
+            verify=args.verify,
+            limit=args.limit,
+        )
+    except FileNotFoundError:
+        print(
+            f"index.json not found at {index_path_str} — "
+            f"run the pipeline first (/pipeline or python -m core.pipeline)",
+            file=sys.stderr,
+        )
+        return 1
+
     sys.stdout.write(md)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

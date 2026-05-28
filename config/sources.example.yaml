@@ -63,9 +63,14 @@ ai_daily_brief_listing:
   perspective: journalist
   scrape_limit: 10
   scrape_full_content: false
+  # fetch_method controls how the index page is fetched:
+  #   auto    — try direct httpx first; fall back to browser if page is empty (default)
+  #   browser — always use Playwright (requires: uv sync --extra browser)
+  #   auto-no-browser — direct httpx only, no browser fallback
   fetch_method: browser
   # listing_link_pattern: 'href="(/episodes/[a-zA-Z0-9_-]+)"'  # optional: override broad default
-  enabled: true
+  # enable after: uv sync --extra browser (or if the index page is static HTML, set fetch_method: auto)
+  enabled: false
 
 # ── Replace everything above with YOUR domain. Example (climate): ──
 #

@@ -20,28 +20,27 @@ Ships two ways from one repo:
 Then, in a session:
 
 1. **Set your key** — `export ANTHROPIC_API_KEY=sk-ant-...` (enrichment runs against the Anthropic API; see [Cost](#cost)).
-2. **Configure your sources** — copy the examples and edit (run from `${CLAUDE_PLUGIN_ROOT}`, the directory where signal-loom was installed):
-   ```
-   cp ${CLAUDE_PLUGIN_ROOT}/config/sources.example.yaml      ${CLAUDE_PLUGIN_ROOT}/config/sources.yaml
-   cp ${CLAUDE_PLUGIN_ROOT}/config/signal-loom.example.yaml  ${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml
-   cp ${CLAUDE_PLUGIN_ROOT}/config/topics.example.yaml       ${CLAUDE_PLUGIN_ROOT}/config/topics.yaml          # your topic vocabulary
-   cp ${CLAUDE_PLUGIN_ROOT}/config/entity-aliases.example.yaml ${CLAUDE_PLUGIN_ROOT}/config/entity-aliases.yaml
-   ```
+2. **Configure your sources** — on first session the plugin creates `config/*.yaml` from the examples automatically. Edit them (your editor / ask Claude to open `${CLAUDE_PLUGIN_ROOT}/config/sources.yaml`). If you want durable config that survives plugin updates, set `SIGNAL_LOOM_CONFIG=/stable/path/signal-loom.yaml`.
 3. **Run it** — `/pipeline` scrapes new items, asks before enriching (cost-aware), and rebuilds the index. Then `/brief --verify` for a topic-grouped digest with live-link checks.
 
 `uv` must be on your PATH (the bootstrap hook installs deps on first session). Install it: <https://docs.astral.sh/uv/>.
 
 ## Headless / scheduled
 
-The same pipeline runs without Claude Code — point cron/launchd at:
+The same pipeline runs without Claude Code. **Start with `--no-enrich` (free) to verify your sources work before spending on enrichment:**
 
 ```bash
-uv run python -m core.pipeline --once         # scrape + enrich + index, one pass
-uv run python -m core.pipeline --once --no-enrich   # scrape + index only (free)
-uv run python -m core.pipeline --once --dry-run     # preview, no writes
+uv run python -m core.pipeline --once --no-enrich   # scrape + index only (free — start here)
+uv run python -m core.pipeline --once               # scrape + enrich + index (bills Anthropic API)
+uv run python -m core.pipeline --once --dry-run     # preview feeds, no writes
+uv run python -m core.pipeline --once --max-enrich 10  # enrich at most 10 files per run
 ```
 
-Needs `ANTHROPIC_API_KEY` for enrichment. Install for headless use with `uv sync` (or `pip install -e .`).
+Enrichment bills per article — see [Cost](#cost). Run `--no-enrich` first to check your sources work, then add enrichment once you're satisfied. Set `ANTHROPIC_API_KEY` before enriching; the pipeline exits with a clear error if it's unset.
+
+From a cloned repo, config files are auto-created from `*.example.yaml` on first run. From an arbitrary directory, set `SIGNAL_LOOM_CONFIG=/path/to/signal-loom.yaml`.
+
+Install for headless use with `uv sync` (or `pip install -e .`).
 
 ---
 
@@ -70,6 +69,38 @@ simon_willison:
 ```
 
 **Output is plain markdown + YAML frontmatter** in `content/`, and a queryable `index.json`. That tree is simultaneously an Obsidian vault, a plain folder, and a static-site source — use whatever you like downstream.
+
+### Configuration reference
+
+**`signal-loom.yaml` keys:**
+
+| Key | Default | Description |
+|---|---|---|
+| `enrichment_model` | `claude-sonnet-4-6` | Anthropic model used for enrichment |
+| `content_dir` | `content` | Where scraped markdown files are written |
+| `index_path` | `index.json` | Output path for the queryable index |
+| `sources_path` | `config/sources.yaml` | Path to sources config |
+| `topics_path` | `config/topics.yaml` | Path to controlled vocabulary |
+| `aliases_path` | `config/entity-aliases.yaml` | Path to entity aliases map |
+
+Relative paths are resolved relative to the config file's directory.
+
+**Source block keys:**
+
+| Key | Required | Description |
+|---|---|---|
+| `type` | yes | `rss` \| `youtube` \| `listing` |
+| `feed_url` | yes | RSS feed URL, YouTube channel URL, or listing page URL |
+| `output_dir` | yes | Relative path where scraped files are written (no `..`) |
+| `name` | no | Display name (defaults to the YAML key) |
+| `tags` | no | List of tags added to every file's frontmatter |
+| `perspective` | no | Author perspective string added to frontmatter |
+| `scrape_limit` | no (10) | Max items scraped per run |
+| `scrape_full_content` | no (false) | For `rss`: fetch full article body instead of feed excerpt |
+| `enabled` | no (true) | Set `false` to skip this source without deleting it |
+| `keyword_filter` | no | `{mode: any\|all, include: [str]}` — filter items by keyword match |
+| `fetch_method` | no (`auto`) | For `listing`: `auto` (direct HTTP first, browser fallback) \| `browser` (always Playwright, requires `uv sync --extra browser`) \| `auto-no-browser` (direct HTTP only) |
+| `listing_link_pattern` | no | Regex to extract article links from the listing page (default: broad path heuristic) |
 
 ## Source types & optional extras
 

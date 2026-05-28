@@ -178,15 +178,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--config",
-        default="config/signal-loom.yaml",
-        help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+        default=None,
+        help="Path to signal-loom.yaml (default: auto-discovered)",
     )
     args = parser.parse_args(argv)
 
     try:
-        from core.config import load_settings
+        from core.config import ensure_configs, load_settings, resolve_config_path
 
-        settings = load_settings(args.config)
+        config_path = resolve_config_path(args.config)
+        ensure_configs(config_path.parent)
+
+        if not config_path.exists():
+            print(
+                f"config not found at {config_path}; "
+                f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
+                file=sys.stderr,
+            )
+            return 1
+
+        settings = load_settings(config_path)
         result = build_index(settings.content_dir, settings.index_path)
         n = len(result["entries"])
         print(f"index: {n} entries → {settings.index_path}")

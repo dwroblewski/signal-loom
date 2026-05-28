@@ -11,14 +11,14 @@ Reads the signal-loom index, groups entries by their controlled-vocabulary `topi
 
 1. **Run the brief:**
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.brief \
-       --index ${CLAUDE_PLUGIN_ROOT}/index.json \
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
+       --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml" \
        --since 7d
    ```
    For link verification (recommended for sharing or archiving):
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.brief \
-       --index ${CLAUDE_PLUGIN_ROOT}/index.json \
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
+       --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml" \
        --since 7d \
        --verify
    ```
@@ -30,8 +30,8 @@ Reads the signal-loom index, groups entries by their controlled-vocabulary `topi
 
 3. **Offer to save** the digest to `content/briefs/<date>.md` if the user wants a persistent copy:
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.brief \
-       --index ${CLAUDE_PLUGIN_ROOT}/index.json \
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
+       --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml" \
        --since 7d --verify > content/briefs/$(date +%F).md
    ```
 
@@ -55,7 +55,7 @@ Reads the signal-loom index, groups entries by their controlled-vocabulary `topi
 
 ## Rules
 
-- Always invoke core via `uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.brief` — skills run from the user's cwd, so `--project` is required for the right environment.
+- Always invoke core via `uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief` — skills run from the user's cwd, so `--project` is required for the right environment.
 - `brief` is a **read-only consumer**: it never writes the corpus or modifies the index.
 - With `--verify`, warn the user that each unique URL incurs a HEAD request; on large windows (`--limit 200`+) this adds noticeable latency.
 - If the index is missing or empty, surface the error clearly and suggest running `/pipeline` first.

@@ -11,7 +11,7 @@ Drives the scrape → enrich → index loop interactively (the headless equivale
 
 1. **Scrape + index (skip enrich for now)** so we can report what's new before spending on enrichment:
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.pipeline --once --no-enrich
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.pipeline --once --no-enrich --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml"
    ```
    Report: how many new files per source, any fetch warnings (e.g. a source needing `uv sync --extra browser`), total new.
 
@@ -21,7 +21,7 @@ Drives the scrape → enrich → index loop interactively (the headless equivale
 
 4. **Rebuild the index:**
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.index
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.index --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml"
    ```
 
 5. **Report** final counts and surface the re-run queue (`failed-enrichments.jsonl`) if any enrichment failed.
