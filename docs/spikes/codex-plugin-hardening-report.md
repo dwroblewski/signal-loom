@@ -14,7 +14,7 @@ This package addresses the adversarial review of the Codex plugin spike:
 
 - `scripts/codex_plugin_e2e.py` installs the local checkout through a temporary
   Codex marketplace, runs real `codex exec` with plugin skills enabled, invokes
-  `$signal-loom-enrich`, applies writeback, rebuilds the index, verifies the
+  the installed signal-loom `$enrich` skill, applies writeback, rebuilds the index, verifies the
   installed cache output, and cleans up the marketplace/plugin/cache.
 - The harness removes `OPENAI_API_KEY`, `CODEX_API_KEY`, and
   `ANTHROPIC_API_KEY`, sets `ZDOTDIR` to an empty temp directory, and passes a

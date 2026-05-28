@@ -80,7 +80,9 @@ def test_build_enrich_prompt_invokes_skill_and_guarded_shell(tmp_path):
 
     prompt = codex_plugin_e2e.build_enrich_prompt(install_root, article, raw_file)
 
-    assert "$signal-loom-enrich" in prompt
+    assert "$enrich" in prompt
+    assert "signal-loom plugin" in prompt
+    assert "not the Claude-oriented" in prompt
     assert "env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY" in prompt
     assert "core.enrichment_packets emit --max-files 1" in prompt
     assert "core.enrichment_writeback apply" in prompt
@@ -120,7 +122,7 @@ def test_verify_codex_final_requires_all_checkpoints(tmp_path):
     output.write_text(
         "\n".join(
             [
-                "skill_used: signal-loom-enrich",
+                "skill_used: enrich",
                 "guarded_env: absent",
                 "writeback: ok",
                 "index_entry: ok",

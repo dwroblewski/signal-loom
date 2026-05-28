@@ -12,7 +12,7 @@ def test_codex_manifest_points_to_codex_only_components():
     assert manifest["skills"] == "./codex/skills/"
     assert manifest["hooks"] == "./hooks/codex-hooks.json"
     assert manifest["interface"]["defaultPrompt"] == [
-        "$signal-loom-pipeline refresh my sources"
+        "$pipeline refresh my sources"
     ]
     assert (ROOT / manifest["skills"]).is_dir()
     assert (ROOT / manifest["hooks"]).is_file()
@@ -31,3 +31,18 @@ def test_codex_hook_uses_plugin_root_and_claude_hook_stays_claude_specific():
     assert '"matcher": "*"' in codex_hooks
     assert "${CLAUDE_PLUGIN_ROOT}" not in codex_hooks
     assert "${CLAUDE_PLUGIN_ROOT}" in claude_hooks
+
+
+def test_codex_skill_names_align_with_claude_commands():
+    expected = {
+        "brief": "brief",
+        "enrich": "enrich",
+        "pipeline": "pipeline",
+    }
+
+    for folder, name in expected.items():
+        codex_skill = (ROOT / "codex" / "skills" / folder / "SKILL.md").read_text()
+        claude_skill = (ROOT / "skills" / folder / "SKILL.md").read_text()
+
+        assert f"name: {name}\n" in codex_skill
+        assert f"name: {name}\n" in claude_skill

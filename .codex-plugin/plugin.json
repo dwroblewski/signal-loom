@@ -27,7 +27,7 @@
       "Brief generation"
     ],
     "defaultPrompt": [
-      "$signal-loom-pipeline refresh my sources"
+      "$pipeline refresh my sources"
     ]
   }
 }

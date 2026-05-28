@@ -136,6 +136,8 @@ Keep the dual plugin architecture:
   Anthropic API-backed headless enrichment.
 - Codex path remains `.codex-plugin/plugin.json`, `codex/skills/`, and
   `hooks/codex-hooks.json`.
+- Codex skill names mirror the Claude command names: `$pipeline`, `$enrich`,
+  and `$brief` align with `/pipeline`, `/enrich`, and `/brief`.
 - Codex-native enrichment remains active-session enrichment: Python emits
   packets and validates writeback; Codex performs model work through ChatGPT
   login.

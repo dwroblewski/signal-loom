@@ -1,9 +1,9 @@
 ---
-name: signal-loom-enrich
-description: Codex-native signal-loom enrichment. Use when Daniel asks to enrich signal-loom articles from Codex without OpenAI or Anthropic API keys.
+name: enrich
+description: Codex-native signal-loom enrichment. Use on "$enrich", "enrich", or "add metadata to new articles" from Codex without OpenAI or Anthropic API keys.
 ---
 
-# signal-loom-enrich
+# enrich
 
 Enrich unenriched signal-loom markdown files using the active Codex session for
 model work. Python remains deterministic: it emits packets, validates raw YAML,

@@ -2,7 +2,7 @@
 """Run a real Codex plugin e2e against a temporary local marketplace.
 
 The harness installs this checkout as a Codex plugin, runs Codex with plugin
-skills enabled, asks Codex to use the installed ``$signal-loom-enrich`` skill,
+skills enabled, asks Codex to use the installed signal-loom ``$enrich`` skill,
 and verifies frontmatter plus index output from the installed plugin cache.
 """
 
@@ -213,7 +213,7 @@ from pilot projects to broad deployment without losing compliance visibility.
 def build_enrich_prompt(install_root: Path, article: Path, raw_file: Path) -> str:
     """Build the Codex prompt that invokes the installed enrichment skill."""
     return f"""
-Use the installed `$signal-loom-enrich` skill for this real e2e.
+Use the installed signal-loom plugin's `$enrich` skill for this real e2e.
 
 Hard requirements:
 - Work against this installed plugin root only: `{install_root}`.
@@ -221,6 +221,8 @@ Hard requirements:
 - Do not read `~/.codex/auth.json`.
 - Do not call OpenAI or Anthropic APIs from Python.
 - Do not run `core.enrich.ApiEnricher`.
+- Follow the Codex-native `$enrich` instructions, not the Claude-oriented
+  top-level `skills/enrich` instructions.
 - Before any signal-loom Python command, use a guarded child shell:
   `ROOT="{install_root}" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c '...'`
 - First verify the guarded child shell reports all three forbidden env vars absent.
@@ -232,7 +234,7 @@ Hard requirements:
 - Verify frontmatter `enriched: true` and one index entry for `{E2E_INDEX_REL}`.
 
 Final response must include these keys, one per line:
-skill_used: signal-loom-enrich
+skill_used: enrich
 guarded_env: absent
 writeback: ok
 index_entry: ok
@@ -273,7 +275,7 @@ def verify_codex_final(output_file: Path) -> dict[str, Any]:
     """Verify the Codex final message reports the required e2e checkpoints."""
     text = output_file.read_text(encoding="utf-8")
     required = {
-        "skill_used": "skill_used: signal-loom-enrich",
+        "skill_used": "skill_used: enrich",
         "guarded_env": "guarded_env: absent",
         "writeback": "writeback: ok",
         "index_entry": "index_entry: ok",

@@ -1,15 +1,15 @@
 ---
-name: signal-loom-pipeline
-description: Codex-native signal-loom pipeline. Use to refresh sources, optionally enrich via Codex seat auth, and rebuild the signal index.
+name: pipeline
+description: Codex-native signal-loom pipeline. Use on "$pipeline", "refresh sources", "check for new content", or "run the pipeline" from Codex.
 ---
 
-# signal-loom-pipeline
+# pipeline
 
 Run the scrape -> optional Codex-native enrich -> index loop from Codex.
 
 ## Steps
 
-1. Resolve `ROOT` as described in `$signal-loom-enrich`.
+1. Resolve `ROOT` as described in `$enrich`.
 
 2. Scrape and index without paid API enrichment:
    ```bash
@@ -19,11 +19,10 @@ Run the scrape -> optional Codex-native enrich -> index loop from Codex.
        --config "$ROOT/config/signal-loom.yaml"'
    ```
 
-3. If unenriched files remain, ask whether to enrich now. Use
-   `$signal-loom-enrich` for that path so Codex, not Python API clients, does
-   model work.
+3. If unenriched files remain, ask whether to enrich now. Use `$enrich` for
+   that path so Codex, not Python API clients, does model work.
 
-4. After enrichment, rebuild the index and offer `$signal-loom-brief`.
+4. After enrichment, rebuild the index and offer `$brief`.
 
 ## Rules
 

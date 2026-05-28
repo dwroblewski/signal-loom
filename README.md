@@ -5,7 +5,7 @@ A personal intelligence pipeline: **declarative sources → scrape → AI-enrich
 Point it at the feeds, channels, and blogs you follow; it scrapes new items, enriches each with structured metadata (summary, topics, entities), builds a queryable index, and produces a verified daily brief grouped by topic. Domain-agnostic — bring your own sources and your own topic vocabulary (AI, climate, finance, healthcare, whatever you track).
 
 Ships three ways from one repo:
-- **A Codex plugin** — `$signal-loom-pipeline`, `$signal-loom-enrich`, and `$signal-loom-brief`; Codex does interactive model work through the active Codex session.
+- **A Codex plugin** — `$pipeline`, `$enrich`, and `$brief`; Codex does interactive model work through the active Codex session.
 - **A Claude Code plugin** — `/pipeline`, `/enrich`, and `/brief`; Claude sub-agents handle interactive enrichment.
 - **A pip-installable Python core** — the same scrape/enrich/index/brief pipeline headless, for cron/launchd (`python -m core.pipeline`).
 
@@ -38,7 +38,7 @@ codex exec \
   -c 'allow_login_shell=false' \
   -c 'shell_environment_policy.experimental_use_profile=false' \
   -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]' \
-  '$signal-loom-pipeline refresh my sources'
+  '$pipeline refresh my sources'
 ```
 
 Current Codex CLI builds may not fire plugin `SessionStart` hooks. The runtime
@@ -194,7 +194,7 @@ signal-loom is extracted from a personal Obsidian-vault pipeline. Intentional si
 - **Tags live in frontmatter** (`tags: [...]`), not line-1 hashtags.
 - **Enrichment schema is "rich-minimal"** — dropped the vault's `relevance` scoring, `content_type`, `claims`, and AI-specific canonical-entity *content*. Kept the *mechanisms*: a user-supplied controlled topic vocabulary and an entity-alias map.
 - **Headless API enrichment remains Anthropic-backed.** `ANTHROPIC_API_KEY` is required when `core.pipeline` runs enrichment without `--no-enrich`.
-- **Interactive Claude and Codex paths stay separate.** Claude Code uses top-level `skills/` and `hooks/hooks.json`; Codex uses `.codex-plugin/plugin.json`, `codex/skills/`, and `hooks/codex-hooks.json`.
+- **Interactive Claude and Codex paths stay separate.** Claude Code uses `/pipeline`, `/enrich`, `/brief`, top-level `skills/`, and `hooks/hooks.json`; Codex uses `$pipeline`, `$enrich`, `$brief`, `.codex-plugin/plugin.json`, `codex/skills/`, and `hooks/codex-hooks.json`.
 - **Codex-native enrichment uses the active Codex session.** Python never reads Codex auth files or requires API keys on that path; use the guarded launch form above if your login shell exports API keys.
 
 ---

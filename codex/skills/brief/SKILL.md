@@ -1,15 +1,15 @@
 ---
-name: signal-loom-brief
-description: Render a signal-loom brief from Codex after the index exists. Use for morning briefs, digest requests, and recent signal summaries.
+name: brief
+description: Render a signal-loom brief from Codex after the index exists. Use on "$brief", "morning brief", digest requests, and recent signal summaries.
 ---
 
-# signal-loom-brief
+# brief
 
 Render the grouped markdown digest from the signal-loom index.
 
 ## Steps
 
-1. Resolve `ROOT` as described in `$signal-loom-enrich`.
+1. Resolve `ROOT` as described in `$enrich`.
 
 2. Run the brief:
    ```bash

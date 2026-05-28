@@ -38,7 +38,7 @@ codex exec \
   -c 'allow_login_shell=false' \
   -c 'shell_environment_policy.experimental_use_profile=false' \
   -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]' \
-  '$signal-loom-pipeline refresh my sources'
+  '$pipeline refresh my sources'
 ```
 
 The 2026-05-28 capability spike tested `allow_login_shell=false` directly. It
@@ -72,7 +72,7 @@ The Anthropic API path remains unchanged:
   deselected.
 - Real plugin e2e harness: `uv run python scripts/codex_plugin_e2e.py`
 - The e2e installs the local checkout through a temporary Codex marketplace,
-  invokes the installed `$signal-loom-enrich` skill, verifies guarded child
+  invokes the installed signal-loom `$enrich` skill, verifies guarded child
   env absence for API-key variables, applies writeback, rebuilds the index, and
   verifies `enriched: true`.
 
