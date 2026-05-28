@@ -72,6 +72,26 @@ ai_daily_brief_listing:
   # enable after: uv sync --extra browser (or if the index page is static HTML, set fetch_method: auto)
   enabled: false
 
+# ── Academic / research feeds work through the `rss` type — no new setup. ──
+# arXiv exposes per-category RSS and an Atom API; the abstract becomes the article
+# body, authors + subject categories (cs.AI, cs.LG, …) come through for enrichment.
+# bioRxiv/medRxiv, PubMed, and most journal "latest articles" RSS work the same way.
+# Uncomment to enable. (A query-driven `academic` source type — OpenAlex-backed,
+# 250M works, no key — is on the v1.1 roadmap for richer structured ingestion.)
+#
+# arxiv_cs_ai:
+#   name: arXiv cs.AI (new submissions)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/cs.AI          # categories: https://arxiv.org/category_taxonomy
+#   # OR query-driven via the Atom API (keyword/author/category control):
+#   # feed_url: "http://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=15"
+#   output_dir: content/arxiv-cs-ai
+#   tags: [arxiv, research]
+#   perspective: researcher
+#   scrape_limit: 15
+#   keyword_filter: { mode: any, include: [agent, evaluation, benchmark] }   # optional pre-filter
+#   enabled: true
+
 # ── Replace everything above with YOUR domain. Example (climate): ──
 #
 # carbon_brief_rss:

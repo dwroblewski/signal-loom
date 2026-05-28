@@ -111,7 +111,9 @@ The default install is free and key-light (only an LLM key). Heavier capabilitie
 | **core** (default) | `uv sync` | `rss` (incl. Substack), `youtube` (free captions), `listing` (static HTML index) | Free — LLM key only |
 | **browser** | `uv sync --extra browser` | `listing` / `fetch_method: browser` for JS-rendered or anti-bot pages | Free (Playwright) |
 
-> Podcast/Whisper transcription, `/signal-scan`, `/search`, full-Substack fetch, and HTML/PDF report rendering are planned for v1.1.
+**Academic / research papers** work through the `rss` type with no extra setup — point a source at an arXiv category feed (`https://rss.arxiv.org/rss/cs.AI`) or the arXiv Atom API query URL (keyword/author/category control); bioRxiv/medRxiv, PubMed, and journal RSS work the same way. The abstract becomes the body and feeds enrichment cleanly. See the commented `arxiv_cs_ai` block in `config/sources.example.yaml`. (A query-driven `academic` source type — OpenAlex-backed, 250M works, no key — is planned for v1.1.)
+
+> Podcast/Whisper transcription, the `academic` source type, `/signal-scan`, `/search`, full-Substack fetch, and HTML/PDF report rendering are planned for v1.1.
 
 ---
 
