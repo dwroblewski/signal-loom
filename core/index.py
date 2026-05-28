@@ -76,6 +76,7 @@ def _build_entry(md_path: Path, content_dir: Path) -> dict | None:
         "topics": topics,
         "entities": entities,
         "summary": fm.get("summary") or "",
+        "enriched": True,
     }
     return entry
 

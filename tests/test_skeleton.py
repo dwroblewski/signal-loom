@@ -25,8 +25,55 @@ def test_endtoend_contract(tmp_path):
 
 
 def _stub_config(tmp_path) -> str:
-    """Defined for completeness; D3 wires the real injection seams.
+    """Build a minimal but valid signal-loom config tree under *tmp_path*.
 
-    Until D3 this is never reached (importorskip skips first).
+    Writes:
+    - ``sources.yaml``        — one enabled RSS source
+    - ``topics.yaml``         — a small vocabulary incl. "ai agents"
+    - ``entity-aliases.yaml`` — empty mapping
+    - ``signal-loom.yaml``    — settings pointing into tmp_path
+
+    Returns the path to ``signal-loom.yaml`` as a str.
     """
-    raise NotImplementedError("Task D3 supplies the stub config + injection seams")
+    import yaml
+
+    content_dir = tmp_path / "content" / "test-source"
+    content_dir.mkdir(parents=True, exist_ok=True)
+
+    # sources.yaml — one RSS source; output_dir inside tmp_path
+    sources = {
+        "test_source": {
+            "name": "Test Source",
+            "type": "rss",
+            "feed_url": "https://fixture.example.com/feed",
+            "output_dir": str(content_dir),
+            "tags": ["ai"],
+            "scrape_limit": 5,
+            "enabled": True,
+        }
+    }
+    sources_path = tmp_path / "sources.yaml"
+    sources_path.write_text(yaml.dump(sources))
+
+    # topics.yaml — vocabulary; "ai agents" is what _FakeEnricher picks first
+    topics = ["ai agents", "model releases", "ai policy", "ai safety", "enterprise ai"]
+    topics_path = tmp_path / "topics.yaml"
+    topics_path.write_text(yaml.dump(topics))
+
+    # entity-aliases.yaml — empty is fine
+    aliases_path = tmp_path / "entity-aliases.yaml"
+    aliases_path.write_text("{}\n")
+
+    # signal-loom.yaml — global settings
+    settings = {
+        "enrichment_model": "claude-sonnet-4-6",
+        "content_dir": str(tmp_path / "content"),
+        "index_path": str(tmp_path / "index.json"),
+        "sources_path": str(sources_path),
+        "topics_path": str(topics_path),
+        "aliases_path": str(aliases_path),
+    }
+    config_path = tmp_path / "signal-loom.yaml"
+    config_path.write_text(yaml.dump(settings))
+
+    return str(config_path)

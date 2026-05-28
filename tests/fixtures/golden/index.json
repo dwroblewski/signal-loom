@@ -1,0 +1,73 @@
+{
+  "entries": [
+    {
+      "path": "2026-05-22 - Autonomous AI Agents Reshape Enterprise Workflows.md",
+      "title": "Autonomous AI Agents Reshape Enterprise Workflows",
+      "source": "one-useful-thing",
+      "url": "https://oneusefulthing.substack.com/p/autonomous-agents-enterprise",
+      "published": "2026-05-22",
+      "tags": [
+        "ai",
+        "ai-agents",
+        "enterprise"
+      ],
+      "topics": {
+        "primary": [
+          "ai agents",
+          "enterprise ai"
+        ],
+        "secondary": [
+          "ai policy",
+          "ai tooling"
+        ]
+      },
+      "entities": {
+        "organizations": [
+          "Anthropic",
+          "Google",
+          "Salesforce"
+        ],
+        "people": [
+          "Ethan Mollick"
+        ]
+      },
+      "summary": "A new wave of autonomous AI agents is transforming enterprise workflows, moving beyond simple chatbot interactions toward systems that can plan, execute multi-step tasks, and coordinate with other agents to complete complex business processes. Early deployments at Fortune 500 companies show agents handling procurement research, contract review, and internal knowledge retrieval with minimal human oversight. Key enablers include improved tool-use APIs, persistent memory across sessions, and robust sandboxed execution environments. However, adoption is slowed by governance concerns around auditability and liability when agents take consequential actions. Industry analysts predict that by 2027, over 30% of knowledge-worker tasks will involve some degree of autonomous agent assistance, fundamentally changing job descriptions across sectors.",
+      "enriched": true
+    },
+    {
+      "path": "2026-05-20 - OpenAI Releases GPT-5 with Enhanced Reasoning.md",
+      "title": "OpenAI Releases GPT-5 with Enhanced Reasoning",
+      "source": "import-ai",
+      "url": "https://importai.substack.com/p/openai-releases-gpt5",
+      "published": "2026-05-20",
+      "tags": [
+        "ai",
+        "model-releases",
+        "openai"
+      ],
+      "topics": {
+        "primary": [
+          "model releases",
+          "ai research"
+        ],
+        "secondary": [
+          "enterprise ai",
+          "ai tooling"
+        ]
+      },
+      "entities": {
+        "organizations": [
+          "OpenAI",
+          "Microsoft"
+        ],
+        "people": [
+          "Sam Altman",
+          "Ilya Sutskever"
+        ]
+      },
+      "summary": "OpenAI has announced GPT-5, the latest iteration of its flagship language model, featuring substantially improved reasoning capabilities and a new chain-of-thought architecture. The release marks a significant leap over GPT-4 on standard benchmarks including MMLU, HumanEval, and MATH, with particular gains in multi-step logical deduction. GPT-5 introduces a novel self-verification layer that allows the model to critique and revise its own outputs before responding, reducing hallucination rates by a reported 40%. The model is initially available via API with tiered rate limits, and OpenAI has signalled a phased rollout to ChatGPT subscribers over the coming weeks. Researchers and enterprise partners will gain early access through an expanded preview programme.",
+      "enriched": true
+    }
+  ],
+  "generated": "2026-05-28T01:23:15.855246+00:00"
+}

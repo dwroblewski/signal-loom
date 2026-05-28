@@ -67,6 +67,7 @@ class Settings:
     index_path: str = "index.json"
     topics_path: str = "config/topics.yaml"
     aliases_path: str = "config/entity-aliases.yaml"
+    sources_path: str = "config/sources.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +135,7 @@ def load_settings(path: str) -> Settings:
         index_path=raw.get("index_path", "index.json"),
         topics_path=raw.get("topics_path", "config/topics.yaml"),
         aliases_path=raw.get("aliases_path", "config/entity-aliases.yaml"),
+        sources_path=raw.get("sources_path", "config/sources.yaml"),
     )
 
 
