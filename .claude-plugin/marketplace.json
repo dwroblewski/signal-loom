@@ -1,0 +1,11 @@
+{
+  "name": "signal-loom",
+  "owner": "dwroblewski",
+  "plugins": [
+    {
+      "name": "signal-loom",
+      "source": ".",
+      "description": "Personal intelligence pipeline."
+    }
+  ]
+}
