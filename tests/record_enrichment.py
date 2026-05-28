@@ -1,10 +1,10 @@
-# Run manually ONCE: uv run python tests/record_enrichment.py
-"""One-time recorder: calls the real LLM and saves the raw response fixture.
+"""One-time recorder: calls the real LLM via the shipped ApiEnricher and saves
+the raw response as a fixture for the offline schema-gate test
+(tests/test_enrich_live.py).
 
-Uses the LLM provider (anthropic/claude-haiku-4-5) via LLM_API_KEY since
-ANTHROPIC_API_KEY on this host is expired.  The full enrichment prompt is
-built identically to core.enrich.ApiEnricher (via core.prompts.build) so the
-fixture faithfully represents real model output for the schema gate test.
+Uses ``core.enrich.ApiEnricher`` — the exact code path the headless pipeline
+uses — so the fixture faithfully represents what signal-loom actually produces.
+Requires ``ANTHROPIC_API_KEY`` in the environment.
 
 Usage:
     cd ~/dev/signal-loom
@@ -15,52 +15,22 @@ import json
 import os
 from pathlib import Path
 
-import httpx
-
 
 def main() -> None:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError("ANTHROPIC_API_KEY not set — export it before recording")
+
+    from core import config, enrich  # local import intentional
+
     content = (Path(__file__).parent / "fixtures" / "ai_article.txt").read_text()
-
-    from core import config, prompts  # noqa: PLC0415 — local import intentional
-
     vocab = config.load_vocabulary("config/topics.example.yaml")
-    prompt = prompts.build(content, vocab)
 
-    or_key = os.environ.get("LLM_API_KEY", "")
-    if not or_key:
-        raise RuntimeError("LLM_API_KEY not set — source ~/.shell-profile or set it manually")
-
-    resp = httpx.post(
-        "https://example.com/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {or_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://signal-loom",
-            "X-Title": "signal-loom",
-        },
-        json={
-            "model": "anthropic/claude-haiku-4-5",
-            "max_tokens": 1500,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-
-    raw: str = data["choices"][0]["message"]["content"]
-    usage_raw = data.get("usage", {})
-    usage = {
-        "input_tokens": usage_raw.get("prompt_tokens", 0),
-        "cache_read_input_tokens": 0,
-        "cache_creation_input_tokens": 0,
-        "output_tokens": usage_raw.get("completion_tokens", 0),
-        "total_input_tokens": usage_raw.get("prompt_tokens", 0),
-    }
+    # Record with a cheap model; the schema gate only cares about output shape.
+    raw, usage = enrich.ApiEnricher(model="claude-haiku-4-5").enrich(content, vocab)
 
     out = Path(__file__).parent / "fixtures" / "recorded_enrichment.json"
     out.write_text(json.dumps({"text": raw, "usage": usage}, indent=2))
-    print(f"recorded {len(raw)} chars; usage {usage}")
+    print(f"recorded {len(raw)} chars via ApiEnricher; usage {usage}")
 
 
 if __name__ == "__main__":
