@@ -1,8 +1,6 @@
 """core/scrape.py — Source adapters: RSS, YouTube, and listing page scrapers.
 
-Ported from internal-pipeline/scripts/scrape_engine.py (RSSAdapter, YouTubeAdapter,
-ListingAdapter, dedup logic, get_adapter factory) and pipeline_utils.py
-(sanitize_filename, parse_rss_date, file_exists_check helpers).
+Adapted from an internal content pipeline.
 
 Key differences from the vault source:
   - No podcast adapter (v1.1).
@@ -34,13 +32,15 @@ from core.config import SourceConfig
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Helpers (ported from pipeline_utils.py)
+# Helpers
 # ---------------------------------------------------------------------------
 
 
 def _sanitize_filename(title: str, max_len: int = 100) -> str:
     """Convert title to safe filename with clean formatting."""
     title = _html_module.unescape(title)
+    # Strip null bytes (would create corrupted or unreadable filenames)
+    title = title.replace("\x00", "")
     # Strip YouTube hashtags (#ai #llm etc.)
     title = re.sub(r"\s*#\w+", "", title)
     # Normalize em/en dashes → regular hyphen with spaces
@@ -52,9 +52,14 @@ def _sanitize_filename(title: str, max_len: int = 100) -> str:
     title = re.sub(r'[<>:"/\\|?*]', "", title)
     # Collapse whitespace
     title = re.sub(r"\s+", " ", title).strip()
+    # Strip leading dots and whitespace (prevent hidden files like ".hidden")
+    title = title.lstrip(". ")
     # Truncate at word boundary
     if len(title) > max_len:
         title = title[:max_len].rsplit(" ", 1)[0]
+    # Final safety: if result is empty after stripping, use a placeholder
+    if not title:
+        title = "untitled"
     return title
 
 
@@ -471,19 +476,43 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
     interpreter's OpenSSL trust store, which is frequently empty on macOS
     Python builds and raises ``CERTIFICATE_VERIFY_FAILED``. httpx ships with
     certifi, matching the rest of the fetch layer (``core.fetch``).
+
+    Applies the SSRF egress guard before the initial request and on every
+    redirect hop (manual following, max 5 hops). Caps response at 10 MB.
     """
     import httpx
 
     from core import fetch
 
-    resp = httpx.get(
-        url,
-        timeout=20,
-        follow_redirects=True,
-        headers={"User-Agent": "Mozilla/5.0 (signal-loom)"},
-    )
-    resp.raise_for_status()
-    return fetch.parse_feed(resp.text)
+    try:
+        fetch._assert_safe_url(url)
+    except fetch.BlockedURLError as exc:
+        logger.warning("_default_fetch_feed blocked URL %s: %s", url, exc)
+        raise
+
+    with httpx.Client(follow_redirects=False, timeout=20, headers={"User-Agent": "Mozilla/5.0 (signal-loom)"}) as client:
+        current_url = url
+        for _ in range(fetch._MAX_REDIRECTS + 1):
+            resp = client.get(current_url)
+            if resp.is_redirect:
+                location = resp.headers.get("location", "")
+                if not location:
+                    break
+                next_url = location if "://" in location else str(httpx.URL(current_url).copy_with(path=location))
+                try:
+                    fetch._assert_safe_url(next_url)
+                except fetch.BlockedURLError as exc:
+                    logger.warning("_default_fetch_feed blocked redirect to %s: %s", next_url, exc)
+                    raise
+                current_url = next_url
+                continue
+            resp.raise_for_status()
+            if len(resp.content) > fetch._MAX_RESPONSE_BYTES:
+                raise ValueError(
+                    f"Feed response for {url} exceeds 10 MB ({len(resp.content)} bytes) — skipping."
+                )
+            return fetch.parse_feed(resp.text)
+        raise ValueError(f"Too many redirects fetching feed {url}")
 
 
 def _default_fetch_article(url: str) -> Optional[str]:
@@ -496,7 +525,7 @@ def _default_fetch_article(url: str) -> Optional[str]:
 def _default_fetch_youtube(channel_url: str, limit: int) -> list[dict]:
     """Default YouTube captions fetcher using yt-dlp + youtube-transcript-api.
 
-    Ported from internal-pipeline/scripts/youtube_transcripts.py:
+    Adapted from an internal content pipeline:
       - yt-dlp lists videos from the channel (flat-playlist, dump-json)
       - youtube-transcript-api fetches captions per video ID
       - Prefer manual EN transcripts; fall back to auto-generated; fall back

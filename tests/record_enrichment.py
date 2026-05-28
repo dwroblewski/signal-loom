@@ -7,7 +7,7 @@ uses — so the fixture faithfully represents what signal-loom actually produces
 Requires ``ANTHROPIC_API_KEY`` in the environment.
 
 Usage:
-    cd ~/dev/signal-loom
+    cd signal-loom
     uv run python tests/record_enrichment.py
 """
 

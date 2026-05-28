@@ -106,7 +106,7 @@ Scraped web content is **untrusted input fed to an LLM** — a hostile page coul
 
 - **The enricher sub-agent has no tools** (`agents/enricher.md`, `tools: []`) — it can only return text, so injected instructions to *act* have nothing to act with.
 - **Output is data, never instructions.** Every enrichment result is parsed and run through `core/validate.py`'s **allow-list** (only `enriched`, `summary`, `topics`, `entities`, `key_takeaways` survive, with type/size checks) before anything is written. Smuggled keys are dropped.
-- **The fetch layer is read-only and source-scoped** — it fetches only the `feed_url`s you declared; it follows no links found in content.
+- **The fetch layer is source-scoped and egress-guarded** — it fetches only the `feed_url`s you declared, plus article links the `listing` adapter extracts from those pages. An SSRF egress guard (`_assert_safe_url`) rejects non-http(s) schemes, private/loopback/link-local/reserved/cloud-metadata addresses, and known cloud-metadata hostnames (including on every redirect hop before following). Note: a `listing_link_pattern` that captures absolute URLs widens what is followed — keep patterns path-relative unless you trust the source completely.
 - **No secrets in scraped-content context** — enrichment prompts carry only the article text and the spec.
 
 ---
@@ -128,6 +128,8 @@ uv sync --extra dev
 uv run pytest -q            # full suite
 uv run pytest -m skeleton   # the end-to-end contract test
 ```
+
+**Reproducible installs:** use `uv sync` (reads `uv.lock`) rather than `pip install -e .` — `pyproject.toml` dependency floors are intentionally open-ended for compatibility, while `uv.lock` pins the exact versions used in development and CI.
 
 CI runs `pytest` on the no-key path (all LLM calls are faked or replayed from a recorded fixture), so it never spends money. Architecture and rationale: see the design spec and implementation plan referenced in the repo history.
 
