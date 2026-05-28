@@ -35,8 +35,6 @@ def bootstrap_configs(root: Path) -> None:
 
 
 def main() -> int:
-    if "--check-only" in sys.argv and venv_python(ROOT).exists():
-        return 0
     if shutil.which("uv") is None:
         sys.stderr.write("signal-loom: `uv` not found on PATH. Install it "
                          "(https://docs.astral.sh/uv/) — see README quickstart.\n")

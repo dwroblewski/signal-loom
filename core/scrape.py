@@ -498,7 +498,7 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
                 location = resp.headers.get("location", "")
                 if not location:
                     break
-                next_url = location if "://" in location else str(httpx.URL(current_url).copy_with(path=location))
+                next_url = urljoin(current_url, location)
                 try:
                     fetch._assert_safe_url(next_url)
                 except fetch.BlockedURLError as exc:
@@ -696,19 +696,31 @@ def _direct_fetch_listing(url: str) -> Optional[str]:
 
     try:
         with httpx.Client(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=30,
             headers={"User-Agent": "Mozilla/5.0 (signal-loom)"},
         ) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            if len(resp.content) > _fetch_mod._MAX_RESPONSE_BYTES:
-                logger.warning(
-                    "_direct_fetch_listing: response for %s exceeds 10 MB — skipping",
-                    url,
-                )
-                return None
-            return resp.text
+            current_url = url
+            for _ in range(_fetch_mod._MAX_REDIRECTS + 1):
+                resp = client.get(current_url)
+                if resp.is_redirect:
+                    location = resp.headers.get("location", "")
+                    if not location:
+                        break
+                    next_url = urljoin(current_url, location)
+                    _fetch_mod._assert_safe_url(next_url)
+                    current_url = next_url
+                    continue
+                resp.raise_for_status()
+                if len(resp.content) > _fetch_mod._MAX_RESPONSE_BYTES:
+                    logger.warning(
+                        "_direct_fetch_listing: response for %s exceeds 10 MB — skipping",
+                        url,
+                    )
+                    return None
+                return resp.text
+            logger.warning("_direct_fetch_listing: too many redirects for %s", url)
+            return None
     except Exception as exc:
         logger.debug("_direct_fetch_listing: failed for %s: %s", url, exc)
         return None

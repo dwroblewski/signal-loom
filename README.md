@@ -77,11 +77,11 @@ simon_willison:
 | Key | Default | Description |
 |---|---|---|
 | `enrichment_model` | `claude-sonnet-4-6` | Anthropic model used for enrichment |
-| `content_dir` | `content` | Where scraped markdown files are written |
-| `index_path` | `index.json` | Output path for the queryable index |
-| `sources_path` | `config/sources.yaml` | Path to sources config |
-| `topics_path` | `config/topics.yaml` | Path to controlled vocabulary |
-| `aliases_path` | `config/entity-aliases.yaml` | Path to entity aliases map |
+| `content_dir` | `../content` from `config/signal-loom.yaml`, otherwise `content` | Where scraped markdown files are written |
+| `index_path` | `../index.json` from `config/signal-loom.yaml`, otherwise `index.json` | Output path for the queryable index |
+| `sources_path` | `sources.yaml` | Path to sources config, resolved relative to `signal-loom.yaml` |
+| `topics_path` | `topics.yaml` | Path to controlled vocabulary, resolved relative to `signal-loom.yaml` |
+| `aliases_path` | `entity-aliases.yaml` | Path to entity aliases map, resolved relative to `signal-loom.yaml` |
 
 Relative paths are resolved relative to the config file's directory.
 

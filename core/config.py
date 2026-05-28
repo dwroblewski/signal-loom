@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -77,9 +77,9 @@ class Settings:
     enrichment_model: str = "claude-sonnet-4-6"
     content_dir: str = "content"
     index_path: str = "index.json"
-    topics_path: str = "config/topics.yaml"
-    aliases_path: str = "config/entity-aliases.yaml"
-    sources_path: str = "config/sources.yaml"
+    topics_path: str = "topics.yaml"
+    aliases_path: str = "entity-aliases.yaml"
+    sources_path: str = "sources.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -241,22 +241,60 @@ def load_settings(path: str | Path) -> Settings:
     with open(path) as fh:
         raw: dict[str, Any] = yaml.safe_load(fh) or {}
 
-    def _resolve(val: str, default: str) -> str:
+    def _resolve(val: str | None, default: str) -> str:
         """Return *val* (or *default*) resolved relative to config_dir if relative."""
         v = val if val is not None else default
         p = Path(v)
         if not p.is_absolute():
-            return str(config_dir / p)
+            return str((config_dir / p).resolve())
         return v
+
+    if config_dir.name == "config":
+        default_content_dir = "../content"
+        default_index_path = "../index.json"
+    else:
+        default_content_dir = "content"
+        default_index_path = "index.json"
 
     return Settings(
         enrichment_model=raw.get("enrichment_model", "claude-sonnet-4-6"),
-        content_dir=_resolve(raw.get("content_dir"), "content"),
-        index_path=_resolve(raw.get("index_path"), "index.json"),
-        topics_path=_resolve(raw.get("topics_path"), "config/topics.yaml"),
-        aliases_path=_resolve(raw.get("aliases_path"), "config/entity-aliases.yaml"),
-        sources_path=_resolve(raw.get("sources_path"), "config/sources.yaml"),
+        content_dir=_resolve(raw.get("content_dir"), default_content_dir),
+        index_path=_resolve(raw.get("index_path"), default_index_path),
+        topics_path=_resolve(raw.get("topics_path"), "topics.yaml"),
+        aliases_path=_resolve(raw.get("aliases_path"), "entity-aliases.yaml"),
+        sources_path=_resolve(raw.get("sources_path"), "sources.yaml"),
     )
+
+
+def resolve_source_output_dirs(
+    sources: list[SourceConfig],
+    settings: Settings,
+) -> list[SourceConfig]:
+    """Return copies of *sources* with output_dir resolved under content_dir.
+
+    Source YAML intentionally keeps ``output_dir`` portable and relative.  The
+    pipeline materializes those paths before scraping so plugin invocations do
+    not accidentally write into the user's current working directory.
+
+    Back-compat rule: examples historically used ``content/<source>`` while
+    settings use ``content_dir``.  If a source path already starts with the
+    content directory's basename, resolve it against ``content_dir.parent``.
+    Otherwise resolve it as a child of ``content_dir``.
+    """
+    content_dir = Path(settings.content_dir)
+    resolved: list[SourceConfig] = []
+
+    for src in sources:
+        output_dir = Path(src.output_dir)
+        if output_dir.is_absolute():
+            materialized = output_dir
+        elif output_dir.parts and output_dir.parts[0] == content_dir.name:
+            materialized = content_dir.parent / output_dir
+        else:
+            materialized = content_dir / output_dir
+        resolved.append(replace(src, output_dir=str(materialized)))
+
+    return resolved
 
 
 def load_vocabulary(path: str) -> set[str]:

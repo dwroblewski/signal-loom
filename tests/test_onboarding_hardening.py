@@ -186,6 +186,45 @@ def test_load_settings_relative_paths_resolved_to_config_dir(tmp_path):
     assert Path(settings.topics_path) == (tmp_path / "config" / "config" / "topics.yaml")
 
 
+def test_load_settings_defaults_do_not_double_config_dir(tmp_path):
+    """Omitted config paths beside config/signal-loom.yaml use sibling YAML files."""
+    config_path = tmp_path / "config" / "signal-loom.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("enrichment_model: claude-sonnet-4-6\n")
+
+    settings = cfg.load_settings(config_path)
+
+    assert Path(settings.content_dir) == tmp_path / "content"
+    assert Path(settings.index_path) == tmp_path / "index.json"
+    assert Path(settings.sources_path) == tmp_path / "config" / "sources.yaml"
+    assert Path(settings.topics_path) == tmp_path / "config" / "topics.yaml"
+    assert Path(settings.aliases_path) == tmp_path / "config" / "entity-aliases.yaml"
+
+
+def test_resolve_source_output_dirs_anchors_to_content_dir(tmp_path):
+    """Pipeline path materialization keeps source writes inside configured content_dir."""
+    settings = cfg.Settings(content_dir=str(tmp_path / "content"))
+    sources = [
+        cfg.SourceConfig(
+            name="A",
+            type="rss",
+            feed_url="https://example.com/feed",
+            output_dir="content/a",
+        ),
+        cfg.SourceConfig(
+            name="B",
+            type="rss",
+            feed_url="https://example.com/feed",
+            output_dir="b",
+        ),
+    ]
+
+    resolved = cfg.resolve_source_output_dirs(sources, settings)
+
+    assert Path(resolved[0].output_dir) == tmp_path / "content" / "a"
+    assert Path(resolved[1].output_dir) == tmp_path / "content" / "b"
+
+
 def test_load_settings_absolute_paths_not_changed(tmp_path):
     """Absolute paths in Settings are returned unchanged."""
     content_dir = tmp_path / "my-content"
@@ -250,6 +289,34 @@ def test_listing_fetch_method_auto_uses_direct_httpx(tmp_path, monkeypatch):
 
     assert len(direct_calls) >= 1, "direct fetch should be called for auto mode"
     assert len(browser_calls) == 0, "browser should NOT be called when direct succeeds"
+
+
+def test_direct_listing_fetch_guards_redirect_targets(httpx_mock, monkeypatch):
+    """Direct listing fetch must SSRF-check every redirect target before following."""
+    from core import scrape as scrape_mod
+    from core import fetch as fetch_mod
+
+    checked_urls = []
+
+    def fake_assert_safe_url(url):
+        checked_urls.append(url)
+        if url.startswith("http://169.254.169.254"):
+            raise fetch_mod.BlockedURLError("blocked metadata redirect")
+
+    monkeypatch.setattr(fetch_mod, "_assert_safe_url", fake_assert_safe_url)
+    httpx_mock.add_response(
+        url="https://example.com/listing",
+        status_code=302,
+        headers={"Location": "http://169.254.169.254/latest/meta-data/"},
+    )
+
+    result = scrape_mod._direct_fetch_listing("https://example.com/listing")
+
+    assert result is None
+    assert checked_urls == [
+        "https://example.com/listing",
+        "http://169.254.169.254/latest/meta-data/",
+    ]
 
 
 def test_listing_fetch_method_browser_skips_direct(tmp_path, monkeypatch):
@@ -548,6 +615,53 @@ def test_pipeline_dry_run_no_index_written(tmp_path, monkeypatch):
 
     assert rc == 0
     assert not (tmp_path / "index.json").exists()
+
+
+def test_pipeline_resolves_source_output_dir_independent_of_cwd(tmp_path, monkeypatch):
+    """Plugin-style config writes into configured content_dir, not the caller cwd."""
+    plugin_root = tmp_path / "plugin"
+    cwd = tmp_path / "caller"
+    config_dir = plugin_root / "config"
+    config_dir.mkdir(parents=True)
+    cwd.mkdir()
+
+    (config_dir / "signal-loom.yaml").write_text(
+        "enrichment_model: claude-sonnet-4-6\n"
+        "content_dir: ../content\n"
+        "index_path: ../index.json\n"
+        "sources_path: sources.yaml\n"
+        "topics_path: topics.yaml\n"
+        "aliases_path: entity-aliases.yaml\n"
+    )
+    (config_dir / "topics.yaml").write_text("- ai agents\n")
+    (config_dir / "entity-aliases.yaml").write_text("{}\n")
+    (config_dir / "sources.yaml").write_text(
+        "smoke:\n"
+        "  name: Smoke\n"
+        "  type: rss\n"
+        "  feed_url: https://fixture.example.com/feed\n"
+        "  output_dir: content/smoke\n"
+        "  tags: [ai]\n"
+        "  scrape_limit: 1\n"
+        "  enabled: true\n"
+    )
+
+    monkeypatch.chdir(cwd)
+    rc = pipeline.main([
+        "--config",
+        str(config_dir / "signal-loom.yaml"),
+        "--once",
+        "--_inject-fetch",
+        "fixture",
+        "--_inject-enricher",
+        "fake",
+    ])
+
+    assert rc == 0
+    assert list((plugin_root / "content").rglob("*.md"))
+    assert not list((cwd / "content").rglob("*.md"))
+    idx = json.loads((plugin_root / "index.json").read_text())
+    assert len(idx["entries"]) == 1
 
 
 # ---------------------------------------------------------------------------

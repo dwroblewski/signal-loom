@@ -48,7 +48,7 @@ import logging
 import re
 import socket
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import feedparser
 import httpx
@@ -231,8 +231,7 @@ def fetch_article_direct(url: str, timeout: int = 15) -> Optional[str]:
                     if not location:
                         break
                     # Resolve relative redirects against the current URL.
-                    next_url = str(httpx.URL(current_url).copy_with()).rstrip("/")
-                    next_url = str(httpx.URL(location) if "://" in location else httpx.URL(current_url).copy_with(path=location))
+                    next_url = urljoin(current_url, location)
                     try:
                         _assert_safe_url(next_url)
                     except BlockedURLError as exc:

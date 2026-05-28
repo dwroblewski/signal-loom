@@ -50,6 +50,7 @@ from core.config import (
     load_sources,
     load_vocabulary,
     resolve_config_path,
+    resolve_source_output_dirs,
 )
 from core import enrichment_writeback, index as index_mod
 from core import scrape as scrape_mod
@@ -249,7 +250,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     try:
-        sources = load_sources(settings.sources_path)
+        sources = resolve_source_output_dirs(
+            load_sources(settings.sources_path),
+            settings,
+        )
     except Exception as exc:
         logger.error("failed to load sources from %s: %s", settings.sources_path, exc)
         return 1
