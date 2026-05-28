@@ -32,6 +32,7 @@ def test_rss_parse_returns_entries():
 
 def test_browser_fetch_actionable_error_without_extra(monkeypatch):
     monkeypatch.setattr(fetch, "_PLAYWRIGHT_AVAILABLE", False)
+    monkeypatch.setattr(fetch, "fetch_article_direct", lambda *a, **kw: None)
     with pytest.raises(fetch.BrowserExtraMissing) as e:
         fetch.fetch_article_with_browser("https://x.test/a")
     assert "uv sync --extra browser" in str(e.value)

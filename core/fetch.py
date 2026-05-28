@@ -29,12 +29,15 @@ Browser extra guard (differs from vault source):
 """
 
 import html as _html_module
+import logging
 import re
 from typing import Optional
 
 import feedparser
 import httpx
 import trafilatura
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Playwright availability guard — checked once at import time
@@ -89,15 +92,18 @@ def fetch_article_direct(url: str, timeout: int = 15) -> Optional[str]:
     network error, timeout, or if trafilatura yields no usable body — caller
     falls back to browser fetch.
     """
-    ua = _BROWSER_UA
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers={"User-Agent": ua}) as client:
+        with httpx.Client(follow_redirects=True, timeout=timeout, headers={"User-Agent": _BROWSER_UA}) as client:
             resp = client.get(url)
             resp.raise_for_status()
             html = resp.text
         text = trafilatura.extract(html, include_comments=False, include_tables=True)
         return text or None
-    except Exception:
+    except (httpx.HTTPError, httpx.TimeoutException) as exc:
+        logger.debug("fetch_article_direct network error for %s: %s", url, exc)
+        return None
+    except Exception as exc:
+        logger.warning("fetch_article_direct unexpected error for %s: %s: %s", url, type(exc).__name__, exc)
         return None
 
 
@@ -157,12 +163,14 @@ def _fetch_browser_html(
     return None, last_err
 
 
-def fetch_article_with_browser(url: str, timeout: int = _BROWSER_TIMEOUT_MS) -> Optional[str]:
+def fetch_article_with_browser(url: str, timeout_ms: int = _BROWSER_TIMEOUT_MS) -> Optional[str]:
     """Fetch article text using direct HTTP first, falling back to headless Firefox.
 
     Strategy:
       1. Try direct httpx + trafilatura (~1s, works for most server-rendered/SSG sites).
       2. If direct yields nothing usable, fall back to hardened Playwright fetch.
+
+    ``timeout_ms`` is in MILLISECONDS (Playwright convention).
 
     Raises BrowserExtraMissing if Playwright is not installed and the direct
     path either fails or returns insufficient content.
@@ -173,23 +181,29 @@ def fetch_article_with_browser(url: str, timeout: int = _BROWSER_TIMEOUT_MS) -> 
         return direct_text
 
     # Fallback: hardened Playwright (raises BrowserExtraMissing if not installed).
-    html, err = _fetch_browser_html(url, timeout_ms=timeout)
+    html, err = _fetch_browser_html(url, timeout_ms=timeout_ms)
     if html is None:
+        if err:
+            logger.warning("fetch_article_with_browser browser fetch failed for %s: %s", url, err)
         return None
     extracted = trafilatura.extract(html, include_comments=False, include_tables=True)
     return extracted or None
 
 
-def fetch_html_with_browser(url: str, timeout: int = _BROWSER_TIMEOUT_MS) -> Optional[str]:
+def fetch_html_with_browser(url: str, timeout_ms: int = _BROWSER_TIMEOUT_MS) -> Optional[str]:
     """Fetch JS-rendered page via headless Firefox, return raw HTML.
 
     For link extraction on listing pages (e.g. Anthropic's index). Use
     fetch_article_with_browser for article body text extraction.
 
+    ``timeout_ms`` is in MILLISECONDS (Playwright convention).
+
     Raises BrowserExtraMissing if Playwright is not installed.
     """
-    html, err = _fetch_browser_html(url, timeout_ms=timeout)
+    html, err = _fetch_browser_html(url, timeout_ms=timeout_ms)
     if html is None:
+        if err:
+            logger.warning("fetch_html_with_browser browser fetch failed for %s: %s", url, err)
         return None
     return html
 
