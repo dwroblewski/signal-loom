@@ -1,0 +1,11 @@
+{
+  "required_fields": ["enriched", "summary", "topics", "entities"],
+  "optional_fields": ["key_takeaways"],
+  "field_specs": {
+    "enriched": {"type": "bool", "const": true},
+    "summary": {"type": "str", "min_len": 200},
+    "topics": {"type": "dict", "subkeys": {"primary": "list", "secondary": "list"}},
+    "entities": {"type": "dict", "subkeys": {"organizations": "list", "people": "list"}},
+    "key_takeaways": {"type": "list", "max_items": 7}
+  }
+}
