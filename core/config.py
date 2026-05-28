@@ -54,6 +54,7 @@ class SourceConfig:
     scrape_full_content: bool = False
     fetch_method: str = "auto"
     keyword_filter: dict | None = None
+    listing_link_pattern: str | None = None
     enabled: bool = True
 
 
@@ -112,6 +113,7 @@ def load_sources(path: str) -> list[SourceConfig]:
             scrape_full_content=bool(data.get("scrape_full_content", False)),
             fetch_method=str(data.get("fetch_method", "auto")),
             keyword_filter=data.get("keyword_filter") or None,
+            listing_link_pattern=data.get("listing_link_pattern") or None,
             enabled=bool(data.get("enabled", True)),
         )
 

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>AI Research Atom Feed</title>
+  <link href="https://ai-research.example.com/"/>
+  <updated>2026-05-20T14:30:00Z</updated>
+  <id>https://ai-research.example.com/</id>
+
+  <entry>
+    <title>Attention Mechanisms in Modern LLMs</title>
+    <link href="https://ai-research.example.com/attention-mechanisms"/>
+    <id>https://ai-research.example.com/attention-mechanisms</id>
+    <published>2026-05-20T14:30:00Z</published>
+    <updated>2026-05-20T14:30:00Z</updated>
+    <summary>A deep look at how attention mechanisms have evolved in modern large language models, covering grouped-query attention, multi-head latent attention, and sliding window variants.</summary>
+  </entry>
+
+  <entry>
+    <title>Scaling Compute for Inference</title>
+    <link href="https://ai-research.example.com/inference-compute"/>
+    <id>https://ai-research.example.com/inference-compute</id>
+    <published>2026-05-15</published>
+    <updated>2026-05-15</updated>
+    <summary>How inference compute requirements scale with model size and context length, with benchmark data across hardware generations.</summary>
+  </entry>
+</feed>
