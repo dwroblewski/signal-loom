@@ -22,3 +22,7 @@ packages = ["core"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+markers = ["skeleton: end-to-end contract, enabled at Task D3"]
+addopts = "-m 'not skeleton'"
