@@ -1,0 +1,31 @@
+{
+  "name": "signal-loom",
+  "version": "0.1.0",
+  "description": "Personal intelligence pipeline: sources -> scrape -> enrich -> brief.",
+  "author": {
+    "name": "Daniel Wroblewski"
+  },
+  "repository": "https://github.com/dwroblewski/signal-loom",
+  "license": "MIT",
+  "keywords": [
+    "research",
+    "feeds",
+    "briefing",
+    "codex"
+  ],
+  "skills": "./codex/skills/",
+  "hooks": "./hooks/codex-hooks.json",
+  "interface": {
+    "displayName": "signal-loom",
+    "shortDescription": "Scrape, enrich, index, and brief personal signal sources.",
+    "longDescription": "A Codex-native wrapper around signal-loom. Codex performs interactive enrichment through the active Codex session, while Python handles scraping, validation, writeback, and indexing.",
+    "developerName": "Daniel Wroblewski",
+    "category": "productivity",
+    "capabilities": [
+      "Research ingestion",
+      "Interactive enrichment",
+      "Brief generation"
+    ],
+    "defaultPrompt": "$signal-loom-pipeline refresh my sources"
+  }
+}

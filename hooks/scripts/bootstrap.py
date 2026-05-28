@@ -8,7 +8,11 @@ Cross-platform (no .sh/.ps1 split).
 import os, shutil, subprocess, sys
 from pathlib import Path
 
-ROOT = Path(os.environ.get("CLAUDE_PLUGIN_ROOT", Path(__file__).resolve().parents[2]))
+ROOT = Path(
+    os.environ.get("PLUGIN_ROOT")
+    or os.environ.get("CLAUDE_PLUGIN_ROOT")
+    or Path(__file__).resolve().parents[2]
+)
 
 
 def venv_python(root: Path) -> Path:
