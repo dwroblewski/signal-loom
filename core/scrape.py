@@ -465,14 +465,25 @@ def _run_listing(
 
 
 def _default_fetch_feed(url: str):  # type: ignore[return]
-    """Default feed fetcher: HTTP GET + feedparser."""
-    import urllib.request
+    """Default feed fetcher: HTTP GET via httpx (certifi CA bundle) + parse.
 
-    import feedparser
+    Uses httpx rather than ``urllib.request.urlopen`` — urllib relies on the
+    interpreter's OpenSSL trust store, which is frequently empty on macOS
+    Python builds and raises ``CERTIFICATE_VERIFY_FAILED``. httpx ships with
+    certifi, matching the rest of the fetch layer (``core.fetch``).
+    """
+    import httpx
 
-    with urllib.request.urlopen(url, timeout=15) as resp:
-        xml_text = resp.read().decode("utf-8", errors="replace")
-    return feedparser.parse(xml_text)
+    from core import fetch
+
+    resp = httpx.get(
+        url,
+        timeout=20,
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 (signal-loom)"},
+    )
+    resp.raise_for_status()
+    return fetch.parse_feed(resp.text)
 
 
 def _default_fetch_article(url: str) -> Optional[str]:
