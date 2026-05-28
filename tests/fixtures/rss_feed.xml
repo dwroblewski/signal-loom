@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Research Blog Feed</title>
+    <link>https://researchblog.example.com</link>
+    <description>Latest posts from Research Blog</description>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 26 May 2026 09:00:00 +0000</lastBuildDate>
+
+    <item>
+      <title>The State of Large Language Models in 2026</title>
+      <link>https://researchblog.example.com/2026-05-15-llm-state</link>
+      <pubDate>Fri, 15 May 2026 08:00:00 +0000</pubDate>
+      <description>An overview of how large language models have evolved, covering post-training techniques, RAG, agentic workflows, and open-source developments.</description>
+      <guid>https://researchblog.example.com/2026-05-15-llm-state</guid>
+    </item>
+
+    <item>
+      <title>A Deep Dive into RAG Architectures</title>
+      <link>https://researchblog.example.com/2026-04-01-rag-deep-dive</link>
+      <pubDate>Wed, 01 Apr 2026 10:30:00 +0000</pubDate>
+      <description>Retrieval-augmented generation has become a production staple. This post examines the major architectural variants and their trade-offs.</description>
+      <guid>https://researchblog.example.com/2026-04-01-rag-deep-dive</guid>
+    </item>
+  </channel>
+</rss>
