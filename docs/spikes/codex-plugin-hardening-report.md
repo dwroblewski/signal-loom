@@ -69,6 +69,36 @@ Observed local evidence on 2026-05-28:
   - `index_enriched`: `true`
   - `hook_bootstrap`: `false`
 
+## Codex CLI version sensitivity (verified 2026-05-28)
+
+The original spike evidence (180 passed; e2e checkpoints) was gathered on Codex
+CLI **0.134**. Two CLI-version dependencies surfaced when re-running the live
+harness on other builds — neither is a signal-loom defect:
+
+- **Plugin install verb requires Codex >= ~0.134.** On **0.129.0** `codex plugin`
+  exposes only `marketplace {add,upgrade,remove}` — there is no `codex plugin add`,
+  so the harness dies at install (`unrecognized subcommand 'add'`). `codex plugin
+  add <plugin>@<marketplace>` exists from 0.134/0.135.
+- **`codex exec` defaults to a read-only sandbox on 0.135.** 0.134 ran the
+  enrichment writes without an explicit sandbox; **0.135** denies them
+  (`writeback: blocked`, `index_entry: blocked` — "writes to the temp dir and
+  installed plugin root were denied"). `--sandbox`'s default is `auto`, which
+  resolved to read-only here. Fix: `codex_exec_args` now passes
+  `--sandbox workspace-write` plus `--add-dir` for the two roots outside the
+  primary workspace (the temp dir holding the raw YAML, and `~/.codex/plugins`
+  holding the installed plugin cache). This stays short of `danger-full-access`
+  and leaves the keyless guard (`guarded_env: absent`) untouched.
+
+**Re-verified live on codex-cli 0.135.0 (2026-05-28), after the sandbox fix:**
+
+- Full regression: `181 passed, 1 deselected`.
+- Real Codex e2e summary:
+  - `codex_final_checkpoints`: `guarded_env`, `index_entry`, `skill_used`, `writeback`
+  - `frontmatter_enriched`: `true`
+  - `index_enriched`: `true` · `index_matches`: `1`
+  - `index_primary_topics`: `ai agents`, `enterprise ai`, `model releases`
+  - `hook_bootstrap`: `false` (expected — see Hook Finding)
+
 ## Residuals
 
 - Plugin SessionStart hook support remains platform-dependent. Do not claim hook
@@ -76,6 +106,9 @@ Observed local evidence on 2026-05-28:
 - The Codex-native enrichment loop is still interactive agent work, not a
   completely unattended background API pipeline. That is intentional while the
   goal is to leverage the active Codex seat rather than API keys.
+- The live harness tracks the moving Codex CLI surface (plugin verbs, sandbox
+  defaults). Re-confirm `codex --version` and the sandbox default when an e2e
+  regresses before assuming a signal-loom regression.
 
 ## Adversarial Review
 
@@ -93,3 +126,9 @@ Observed local evidence on 2026-05-28:
 - Attack: Codex changes regress the Claude/API close path. Mitigation: focused
   tests still prove missing `ANTHROPIC_API_KEY` fails API enrichment and
   `--no-enrich` skips the key check.
+- Attack: a new Codex CLI silently changes the `codex exec` sandbox default to
+  read-only, so deterministic writes fail and the e2e looks like a code
+  regression. Mitigation: the harness pins `--sandbox workspace-write` with
+  explicit `--add-dir` writable roots (not the CLI default), and the version-
+  sensitivity section documents the 0.135 read-only default + the >=0.134
+  `codex plugin add` requirement.
