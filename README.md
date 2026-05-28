@@ -20,12 +20,12 @@ Ships two ways from one repo:
 Then, in a session:
 
 1. **Set your key** — `export ANTHROPIC_API_KEY=sk-ant-...` (enrichment runs against the Anthropic API; see [Cost](#cost)).
-2. **Configure your sources** — copy the examples and edit:
+2. **Configure your sources** — copy the examples and edit (run from `${CLAUDE_PLUGIN_ROOT}`, the directory where signal-loom was installed):
    ```
-   cp config/sources.example.yaml      config/sources.yaml
-   cp config/signal-loom.example.yaml  config/signal-loom.yaml
-   cp config/topics.example.yaml       config/topics.yaml          # your topic vocabulary
-   cp config/entity-aliases.example.yaml config/entity-aliases.yaml
+   cp ${CLAUDE_PLUGIN_ROOT}/config/sources.example.yaml      ${CLAUDE_PLUGIN_ROOT}/config/sources.yaml
+   cp ${CLAUDE_PLUGIN_ROOT}/config/signal-loom.example.yaml  ${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml
+   cp ${CLAUDE_PLUGIN_ROOT}/config/topics.example.yaml       ${CLAUDE_PLUGIN_ROOT}/config/topics.yaml          # your topic vocabulary
+   cp ${CLAUDE_PLUGIN_ROOT}/config/entity-aliases.example.yaml ${CLAUDE_PLUGIN_ROOT}/config/entity-aliases.yaml
    ```
 3. **Run it** — `/pipeline` scrapes new items, asks before enriching (cost-aware), and rebuilds the index. Then `/brief --verify` for a topic-grouped digest with live-link checks.
 

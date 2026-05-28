@@ -120,3 +120,49 @@ def build_index(
     out_path.write_text(json.dumps(result, indent=2))
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point: ``python -m core.index``.
+
+    Loads settings from ``--config`` (default ``config/signal-loom.yaml``),
+    calls :func:`build_index`, and prints a summary line to stdout.
+
+    Exits 0 on success, 1 on error.
+    """
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="python -m core.index",
+        description="Build index.json from enriched markdown files.",
+    )
+    parser.add_argument(
+        "--config",
+        default="config/signal-loom.yaml",
+        help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        from core.config import load_settings
+
+        settings = load_settings(args.config)
+        result = build_index(settings.content_dir, settings.index_path)
+        n = len(result["entries"])
+        print(f"index: {n} entries → {settings.index_path}")
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(main())

@@ -17,7 +17,12 @@ Enriches scraped markdown files that lack an enrichment block, by dispatching pa
 
 2. **Load the model + vocabulary** the enrichers must use, from config: `enrichment_model` and the controlled topic vocabulary (`topics_path`). The sub-agents MUST be told the configured `enrichment_model` (do not hardcode a model) and the allowed primary-topic list — this is what keeps interactive enrichment consistent with the headless path.
 
-3. **Dispatch one `enricher` sub-agent per file, in parallel.** Give each: the article body (the markdown content below the frontmatter) and the allowed vocabulary. Each returns a single ```yaml block. Use the configured `enrichment_model` for the dispatch.
+3. **Dispatch one `enricher` sub-agent per file, in parallel.** The skill must inject into each sub-agent's prompt (as text — the agent has no tools and cannot read files):
+   - The **full contents** of `${CLAUDE_PLUGIN_ROOT}/core/enrichment_spec.md`
+   - The **allowed primary-topic vocabulary** (the full list loaded from `topics_path`)
+   - The **article body** (the markdown content below the frontmatter)
+
+   Each sub-agent returns a single ```yaml block. Use the configured `enrichment_model` for the dispatch.
 
 4. **Hand each raw result to writeback — do not transform it:**
    ```

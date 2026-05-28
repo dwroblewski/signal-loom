@@ -276,34 +276,68 @@ def apply_batch(
 
 
 # ---------------------------------------------------------------------------
-# Minimal CLI shim
+# CLI shim
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point: ``python -m core.enrichment_writeback apply <file.md>``.
+
+    Reads raw model output from stdin, loads settings (``--config`` overrides
+    the default ``config/signal-loom.yaml``), then calls :func:`apply` and
+    prints ``OK <path>`` on success or the validation errors on failure.
+
+    Exits 0 on success, 1 on validation failure or bad arguments.
+    """
+    import argparse
     import sys
 
-    if len(sys.argv) < 2:
-        print("usage: python -m core.enrichment_writeback <file.md>", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        prog="python -m core.enrichment_writeback",
+        description="Apply enrichment YAML (from stdin) to a markdown file's frontmatter.",
+    )
+    sub = parser.add_subparsers(dest="command")
 
-    target = Path(sys.argv[1])
+    apply_p = sub.add_parser("apply", help="Apply raw YAML from stdin to <file.md>")
+    apply_p.add_argument("path", help="Markdown file to update")
+    apply_p.add_argument(
+        "--config",
+        default="config/signal-loom.yaml",
+        help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+    )
+
+    args = parser.parse_args(argv)
+
+    if args.command != "apply":
+        parser.print_help(sys.stderr)
+        return 1
+
+    target = Path(args.path)
     raw_input = sys.stdin.read()
 
-    # Best-effort: load vocab/aliases from config if available.
+    # Load vocab and aliases via config; fall back to empty on missing files.
     _vocab: set[str] = set()
     _aliases: dict[str, str] = {}
     try:
-        from core.config import load as _load_config  # type: ignore[import]
+        from core.config import load_settings, load_vocabulary, load_aliases
 
-        cfg = _load_config()
-        _vocab = set(cfg.get("vocabulary", []))
-        _aliases = cfg.get("aliases", {})
+        settings = load_settings(args.config)
+        _vocab = load_vocabulary(settings.topics_path)
+        _aliases = load_aliases(settings.aliases_path)
     except Exception:  # noqa: BLE001
         pass
 
     res = apply(target, raw_input, vocabulary=_vocab, aliases=_aliases)
     if res.ok:
-        print(f"ok: {target} updated in {res.attempts} attempt(s)")
+        print(f"OK {target}")
+        return 0
     else:
-        print(f"failed after {res.attempts} attempt(s): {res.errors}", file=sys.stderr)
-        sys.exit(1)
+        for err in res.errors:
+            print(err, file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(main())

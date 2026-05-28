@@ -175,3 +175,51 @@ def load_aliases(path: str) -> dict[str, str]:
         raise ConfigError(f"aliases file '{path}' must be a YAML mapping")
 
     return {str(k): str(v) for k, v in raw.items()}
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point: ``python -m core.config --print <field>``.
+
+    Loads settings from ``--config`` (default ``config/signal-loom.yaml``)
+    and prints the value of the named Settings field to stdout.
+
+    Exits 0 on success, 1 on error.
+    """
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="python -m core.config",
+        description="Print a Settings field value from signal-loom.yaml.",
+    )
+    parser.add_argument("--print", dest="field", required=True, help="Settings field to print")
+    parser.add_argument(
+        "--config",
+        default="config/signal-loom.yaml",
+        help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        settings = load_settings(args.config)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error loading config: {exc}", file=sys.stderr)
+        return 1
+
+    if not hasattr(settings, args.field):
+        print(f"error: unknown field '{args.field}'", file=sys.stderr)
+        return 1
+
+    print(getattr(settings, args.field))
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(main())
