@@ -6,6 +6,7 @@ import feedparser
 import pytest
 
 from core import fetch
+from core import index
 
 
 @pytest.fixture
@@ -18,3 +19,12 @@ def rss_fixture():
     """
     xml_text = (Path(__file__).parent / "fixtures" / "rss_feed.xml").read_text()
     return fetch.parse_feed(xml_text)
+
+
+@pytest.fixture
+def index_file(tmp_path):
+    """Build an index from the golden corpus into a temp file; return its path."""
+    src = Path(__file__).parent / "fixtures/golden/content"
+    out = tmp_path / "index.json"
+    index.build_index(src, out)
+    return out
