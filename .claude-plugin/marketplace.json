@@ -1,10 +1,11 @@
 {
   "name": "signal-loom",
-  "owner": "dwroblewski",
+  "owner": { "name": "dwroblewski" },
+  "description": "Personal intelligence pipeline — sources → scrape → enrich → brief.",
   "plugins": [
     {
       "name": "signal-loom",
-      "source": ".",
+      "source": { "source": "url", "url": "https://github.com/dwroblewski/signal-loom.git" },
       "description": "Personal intelligence pipeline."
     }
   ]
