@@ -117,3 +117,132 @@ ai_daily_brief_listing:
 #   fetch_method: browser
 #   scrape_limit: 8
 #   enabled: true
+
+# ── Example domain: FINANCE (quant + macro/fundamental) ─────────────────────
+# All feeds below were verified live. Pair with a finance topics.yaml, e.g.:
+#   - asset pricing
+#   - market microstructure
+#   - portfolio construction
+#   - factor investing
+#   - risk and volatility
+#   - derivatives and options
+#   - monetary policy
+#   - inflation
+#   - financial stability
+#   - macro and growth
+# and entity-aliases.yaml, e.g.:  Federal Reserve: Fed ; European Central Bank: ECB
+#
+# ---- For QUANTS (methods, microstructure, pricing, risk) ----
+# arxiv q-fin taxonomy: PM=portfolio, TR=trading/microstructure, RM=risk, PR=pricing,
+#   CP=computational, ST=statistical, MF=mathematical, GN=general, EC=economics.
+#
+# qfin_portfolio:
+#   name: arXiv q-fin.PM (Portfolio Management)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/q-fin.PM
+#   output_dir: content/qfin-portfolio
+#   tags: [quant, portfolio]
+#   perspective: researcher
+#   scrape_limit: 15
+#   enabled: true
+#
+# qfin_microstructure:
+#   name: arXiv q-fin.TR (Trading & Market Microstructure)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/q-fin.TR
+#   output_dir: content/qfin-microstructure
+#   tags: [quant, microstructure, execution]
+#   scrape_limit: 15
+#   enabled: true
+#
+# qfin_risk:
+#   name: arXiv q-fin.RM (Risk Management)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/q-fin.RM
+#   output_dir: content/qfin-risk
+#   tags: [quant, risk]
+#   scrape_limit: 10
+#   enabled: true
+#
+# qfin_pricing:
+#   name: arXiv q-fin.PR (Pricing of Securities / derivatives)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/q-fin.PR
+#   output_dir: content/qfin-pricing
+#   tags: [quant, derivatives, pricing]
+#   scrape_limit: 10
+#   enabled: true
+#
+# econ_econometrics:
+#   name: arXiv econ.EM (Econometrics)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/econ.EM
+#   output_dir: content/econometrics
+#   tags: [econ, methods]
+#   scrape_limit: 10
+#   enabled: true
+#
+# ---- For MACRO / FUNDAMENTAL investors (policy, central banks, working papers) ----
+# nber_new:
+#   name: NBER New Working Papers
+#   type: rss
+#   feed_url: https://www.nber.org/rss/new.xml
+#   output_dir: content/nber
+#   tags: [macro, working-paper]
+#   perspective: researcher
+#   scrape_limit: 20
+#   keyword_filter:                         # NBER spans all of econ; focus it
+#     mode: any
+#     include: [monetary, inflation, fiscal, asset pricing, banking, credit, growth]
+#   enabled: true
+#
+# fed_feds_notes:
+#   name: Federal Reserve — FEDS Notes
+#   type: rss
+#   feed_url: https://www.federalreserve.gov/feeds/feds_notes.xml
+#   output_dir: content/fed-feds
+#   tags: [macro, fed, policy]
+#   scrape_limit: 15
+#   enabled: true
+#
+# nyfed_liberty_street:
+#   name: NY Fed — Liberty Street Economics
+#   type: rss
+#   feed_url: https://libertystreeteconomics.newyorkfed.org/feed/
+#   output_dir: content/nyfed-liberty-street
+#   tags: [macro, fed, commentary]
+#   scrape_limit: 15
+#   enabled: true
+#
+# bis_working_papers:
+#   name: BIS Working Papers
+#   type: rss
+#   feed_url: https://www.bis.org/doclist/wppubls.rss
+#   output_dir: content/bis
+#   tags: [macro, financial-stability, central-banks]
+#   scrape_limit: 15
+#   enabled: true
+#
+# boe_bank_underground:
+#   name: Bank of England — Bank Underground
+#   type: rss
+#   feed_url: https://bankunderground.co.uk/feed/
+#   output_dir: content/boe-bank-underground
+#   tags: [macro, boe, commentary]
+#   scrape_limit: 10
+#   enabled: true
+#
+# econ_general:
+#   name: arXiv econ.GN (General Economics)
+#   type: rss
+#   feed_url: https://rss.arxiv.org/rss/econ.GN
+#   output_dir: content/econ-general
+#   tags: [econ]
+#   scrape_limit: 10
+#   enabled: true
+#
+# NOTE — not RSS-reachable (gated/blocked as of 2026-05): SSRN (no public RSS),
+# IMF working papers (403), VoxEU/CEPR (503), and most finance JOURNALS
+# (Journal of Finance, JFE, RFS). These — plus structured author/citation/DOI
+# data — are the job of the planned v1.1 `academic` source type (OpenAlex, no key)
+# and RePEc/IDEAS feeds. See docs spike: academic-source.
