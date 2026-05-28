@@ -34,9 +34,17 @@ env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY \
 codex exec \
   --enable plugins \
   --enable hooks \
+  -c 'forced_login_method="chatgpt"' \
+  -c 'allow_login_shell=false' \
+  -c 'shell_environment_policy.experimental_use_profile=false' \
   -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]' \
   '$signal-loom-pipeline refresh my sources'
 ```
+
+The 2026-05-28 capability spike tested `allow_login_shell=false` directly. It
+changed Codex shell commands from `zsh -lc` to `zsh -c`, but `OPENAI_API_KEY`
+still reappeared without `ZDOTDIR`, so the empty `ZDOTDIR` remains part of the
+supported guard on this machine.
 
 Inside skills, every signal-loom Python command also runs through a guarded
 child shell:
@@ -77,6 +85,8 @@ The Anthropic API path remains unchanged:
 - This spike does not add unattended OpenAI API enrichment. That is intentional:
   the Codex-native path uses the active Codex session for model work so it can
   leverage ChatGPT/Codex account auth without exposing tokens to plugin code.
+- Do not treat MCP OAuth as the seat-auth mechanism. Codex MCP OAuth is for
+  authenticating streamable HTTP MCP servers, not the Codex model provider.
 - Codex CLI 0.134 did not fire this plugin's `SessionStart` hook in local
   characterization runs, even with plugins, hooks, and trust bypass enabled.
   Runtime commands therefore keep `ensure_configs(...)` lazy-bootstrap as the

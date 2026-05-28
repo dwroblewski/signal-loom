@@ -34,6 +34,9 @@ env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY \
 codex exec \
   --enable plugins \
   --enable hooks \
+  -c 'forced_login_method="chatgpt"' \
+  -c 'allow_login_shell=false' \
+  -c 'shell_environment_policy.experimental_use_profile=false' \
   -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]' \
   '$signal-loom-pipeline refresh my sources'
 ```
@@ -41,6 +44,10 @@ codex exec \
 Current Codex CLI builds may not fire plugin `SessionStart` hooks. The runtime
 commands still lazy-bootstrap `config/*.yaml` from examples before use; the e2e
 harness records whether hook bootstrap was observed.
+
+`allow_login_shell=false` narrows Codex shell startup, but it does not replace
+`ZDOTDIR` on this machine; zsh startup can still re-export keys without the
+isolated dotdir.
 
 ## Quickstart (Claude Code plugin)
 

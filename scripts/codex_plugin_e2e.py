@@ -44,6 +44,7 @@ def marketplace_payload(marketplace_name: str) -> dict[str, Any]:
     """Return the local marketplace JSON used by this harness."""
     return {
         "name": marketplace_name,
+        "interface": {"displayName": "Signal Loom Real E2E"},
         "owner": {"name": "local"},
         "description": "Temporary signal-loom Codex e2e marketplace.",
         "plugins": [
@@ -53,13 +54,14 @@ def marketplace_payload(marketplace_name: str) -> dict[str, Any]:
                     "source": "local",
                     "path": f"./plugins/{PLUGIN_NAME}",
                 },
+                "policy": {
+                    "installation": "AVAILABLE",
+                    "authentication": "ON_USE",
+                },
+                "category": "Productivity",
                 "description": "Signal Loom local Codex e2e install.",
             }
         ],
-        "policy": {
-            "installation": {"default": "AVAILABLE"},
-            "authentication": {"default": "ON_USE"},
-        },
     }
 
 
@@ -127,6 +129,12 @@ def codex_exec_args(output_file: Path, cwd: Path, prompt: str) -> list[str]:
         "--enable",
         "hooks",
         "--dangerously-bypass-hook-trust",
+        "-c",
+        'forced_login_method="chatgpt"',
+        "-c",
+        "allow_login_shell=false",
+        "-c",
+        "shell_environment_policy.experimental_use_profile=false",
         "-c",
         'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]',
         "--output-last-message",

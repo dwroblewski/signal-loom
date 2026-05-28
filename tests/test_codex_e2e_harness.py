@@ -41,12 +41,17 @@ def test_marketplace_payload_uses_local_relative_plugin_path():
     payload = codex_plugin_e2e.marketplace_payload("signal-loom-test")
 
     assert payload["name"] == "signal-loom-test"
+    assert payload["interface"]["displayName"] == "Signal Loom Real E2E"
     assert payload["plugins"][0]["name"] == "signal-loom"
     assert payload["plugins"][0]["source"] == {
         "source": "local",
         "path": "./plugins/signal-loom",
     }
-    assert payload["policy"]["authentication"]["default"] == "ON_USE"
+    assert payload["plugins"][0]["policy"] == {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE",
+    }
+    assert payload["plugins"][0]["category"] == "Productivity"
 
 
 def test_codex_exec_args_enable_plugins_hooks_and_exclude_keys(tmp_path):
@@ -60,7 +65,10 @@ def test_codex_exec_args_enable_plugins_hooks_and_exclude_keys(tmp_path):
     assert ["--enable", "plugins"] == args[args.index("--enable") : args.index("--enable") + 2]
     assert "hooks" in args
     assert "--dangerously-bypass-hook-trust" in args
-    policy = args[args.index("-c") + 1]
+    assert 'forced_login_method="chatgpt"' in args
+    assert "allow_login_shell=false" in args
+    assert "shell_environment_policy.experimental_use_profile=false" in args
+    policy = args[args.index("shell_environment_policy.exclude=[\"OPENAI_API_KEY\",\"CODEX_API_KEY\",\"ANTHROPIC_API_KEY\"]")]
     for key in codex_plugin_e2e.FORBIDDEN_ENV_KEYS:
         assert key in policy
 

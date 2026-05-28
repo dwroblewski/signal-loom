@@ -19,6 +19,10 @@ This package addresses the adversarial review of the Codex plugin spike:
 - The harness removes `OPENAI_API_KEY`, `CODEX_API_KEY`, and
   `ANTHROPIC_API_KEY`, sets `ZDOTDIR` to an empty temp directory, and passes a
   Codex shell-environment exclude policy.
+- A follow-up Codex capability spike added `forced_login_method="chatgpt"`,
+  `allow_login_shell=false`, and `shell_environment_policy.experimental_use_profile=false`
+  to the real e2e command. Local evidence still requires `ZDOTDIR`; non-login
+  shell mode alone did not stop `OPENAI_API_KEY` from reappearing.
 - Codex skills now run signal-loom Python commands through guarded child shells
   so plugin code does not depend on API-key environment variables.
 - `core.enrichment_writeback apply` now appends validation failures to
