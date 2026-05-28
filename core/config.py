@@ -103,11 +103,28 @@ def load_sources(path: str) -> list[SourceConfig]:
                 f"v1 supports {sorted(_V1_TYPES)}"
             )
 
+        output_dir_raw: str = data.get("output_dir", "")
+        # Containment check: reject absolute paths and path-traversal segments.
+        # This guard applies only to sources loaded from YAML; programmatic
+        # SourceConfig(...) construction is unaffected.
+        import os as _os
+        if _os.path.isabs(output_dir_raw):
+            raise ConfigError(
+                f"source '{key}': output_dir '{output_dir_raw}' must be a relative path, "
+                "not an absolute path."
+            )
+        # Normalise to detect '..' after joining (e.g. "a/../../../etc")
+        _normalised = _os.path.normpath(output_dir_raw) if output_dir_raw else ""
+        if any(part == ".." for part in _normalised.replace("\\", "/").split("/")):
+            raise ConfigError(
+                f"source '{key}': output_dir '{output_dir_raw}' must not contain '..' segments."
+            )
+
         src = SourceConfig(
             name=data.get("name", key),
             type=src_type,
             feed_url=data.get("feed_url", ""),
-            output_dir=data.get("output_dir", ""),
+            output_dir=output_dir_raw,
             tags=list(data.get("tags") or []),
             perspective=data.get("perspective"),
             scrape_limit=int(data.get("scrape_limit", 10)),

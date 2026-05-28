@@ -26,6 +26,11 @@ def _build_stub_config(tmp_path: Path) -> str:
     """Write a minimal signal-loom config tree under *tmp_path*.
 
     Returns the path to ``signal-loom.yaml`` as a str.
+
+    ``output_dir`` in sources.yaml is written as a relative path
+    (``content/smoke-source``) so it passes the load_sources containment check
+    (fix #6: absolute paths are rejected).  Callers must chdir to *tmp_path*
+    before invoking pipeline.main() so the relative path resolves correctly.
     """
     content_dir = tmp_path / "content" / "smoke-source"
     content_dir.mkdir(parents=True, exist_ok=True)
@@ -35,7 +40,9 @@ def _build_stub_config(tmp_path: Path) -> str:
             "name": "Smoke Source",
             "type": "rss",
             "feed_url": "https://fixture.example.com/feed",
-            "output_dir": str(content_dir),
+            # Relative path — passes containment check; resolves against CWD
+            # which callers set to tmp_path via monkeypatch.chdir().
+            "output_dir": "content/smoke-source",
             "tags": ["ai"],
             "scrape_limit": 5,
             "enabled": True,
@@ -53,6 +60,8 @@ def _build_stub_config(tmp_path: Path) -> str:
 
     settings = {
         "enrichment_model": "claude-sonnet-4-6",
+        # content_dir and index_path in signal-loom.yaml are Settings, not
+        # SourceConfig.output_dir — the absolute-path check does not apply there.
         "content_dir": str(tmp_path / "content"),
         "index_path": str(tmp_path / "index.json"),
         "sources_path": str(sources_path),
@@ -69,8 +78,9 @@ def _build_stub_config(tmp_path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_pipeline_smoke(tmp_path):
+def test_pipeline_smoke(tmp_path, monkeypatch):
     """Full pipeline pass with both seams active: rc==0, index has enriched entry."""
+    monkeypatch.chdir(tmp_path)  # so relative output_dir resolves correctly
     config = _build_stub_config(tmp_path)
 
     rc = pipeline.main([
@@ -91,8 +101,9 @@ def test_pipeline_smoke(tmp_path):
     assert idx["entries"][0]["enriched"] is True, "first entry must have enriched=True"
 
 
-def test_pipeline_no_enrich(tmp_path):
+def test_pipeline_no_enrich(tmp_path, monkeypatch):
     """With --no-enrich the index is still rebuilt but no enrichment runs."""
+    monkeypatch.chdir(tmp_path)  # so relative output_dir resolves correctly
     config = _build_stub_config(tmp_path)
 
     rc = pipeline.main([
@@ -107,8 +118,9 @@ def test_pipeline_no_enrich(tmp_path):
     assert (tmp_path / "index.json").exists()
 
 
-def test_pipeline_dry_run(tmp_path):
+def test_pipeline_dry_run(tmp_path, monkeypatch):
     """--dry-run returns 0 and does NOT write any files."""
+    monkeypatch.chdir(tmp_path)  # so relative output_dir resolves correctly
     config = _build_stub_config(tmp_path)
 
     rc = pipeline.main([
@@ -142,3 +154,53 @@ def test_fake_enricher_vocab_topic():
     assert "ai agents" in raw
     assert "enriched: true" in raw
     assert usage["total_input_tokens"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Fix #7 — Enrichment backlog drain
+# ---------------------------------------------------------------------------
+
+
+def test_pipeline_enriches_preexisting_unenriched_file(tmp_path, monkeypatch):
+    """Pre-existing unenriched *.md files must be enriched even when scraping yields 0 new files.
+
+    This test:
+      1. Places a pre-existing unenriched markdown file in content_dir BEFORE running.
+      2. Runs the pipeline with --_inject-fetch fixture AND --_inject-enricher fake,
+         but the pre-existing file was not scraped this run (dedup would skip it).
+      3. Asserts the pre-existing file has been enriched (enriched: true in frontmatter).
+    """
+    import frontmatter as _fm
+
+    monkeypatch.chdir(tmp_path)  # so relative output_dir resolves correctly
+    config_path = _build_stub_config(tmp_path)
+
+    # Plant a pre-existing unenriched file directly in content_dir (not scraped this run).
+    preexisting_dir = tmp_path / "content" / "other-source"
+    preexisting_dir.mkdir(parents=True, exist_ok=True)
+    preexisting_md = preexisting_dir / "preexisting-article.md"
+    preexisting_md.write_text(
+        "---\n"
+        "title: Pre-existing Article\n"
+        "source: other-source\n"
+        "url: https://example.com/pre\n"
+        "published: '2026-05-01'\n"
+        "---\n"
+        "This is an article that was scraped in a previous run but never enriched.\n"
+        + ("body content " * 50)
+    )
+
+    rc = pipeline.main([
+        "--config", config_path,
+        "--once",
+        "--_inject-fetch", "fixture",
+        "--_inject-enricher", "fake",
+    ])
+
+    assert rc == 0, "Pipeline should succeed"
+
+    # The pre-existing file must now have enriched: true.
+    post = _fm.load(str(preexisting_md))
+    assert post.metadata.get("enriched") is True, (
+        "Pre-existing unenriched file must be enriched in the same pipeline run"
+    )

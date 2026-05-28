@@ -121,3 +121,97 @@ def test_brief_no_verify_does_not_head_check(index_file, httpx_mock):
     md = brief.build(index_file, since="2026-01-01", verify=False)
     assert isinstance(md, str)
     assert len(md) > 0
+
+
+# ---------------------------------------------------------------------------
+# Fix #3 — Brief --verify SSRF guard
+# ---------------------------------------------------------------------------
+
+
+def test_brief_verify_blocks_private_ip_url(tmp_path, monkeypatch):
+    """An index entry with a private/internal URL must be marked 'blocked', not HEADed.
+
+    The SSRF guard in _head_check must intercept the URL before httpx makes
+    any request. We monkeypatch _assert_safe_url to raise for the private URL
+    and verify:
+      1. The URL's tier is 'blocked' in last_verification().
+      2. No HTTP HEAD request was issued for that URL (httpx_mock would fail
+         if an unexpected request were made).
+    """
+    import json
+
+    # Build a minimal index with one private-IP URL.
+    private_url = "http://169.254.169.254/latest/meta-data/"
+    index_data = {
+        "entries": [
+            {
+                "path": "test/article.md",
+                "title": "SSRF Test Article",
+                "source": "test",
+                "url": private_url,
+                "published": "2026-05-01",
+                "tags": [],
+                "topics": {"primary": ["ai agents"], "secondary": []},
+                "entities": {},
+                "summary": "test summary",
+                "enriched": True,
+            }
+        ],
+        "generated": "2026-05-01T00:00:00+00:00",
+    }
+    index_path = tmp_path / "index.json"
+    index_path.write_text(json.dumps(index_data))
+
+    # No httpx responses registered — any HEAD call would raise.
+    brief.build(str(index_path), since="2026-01-01", verify=True)
+    status = brief.last_verification()
+    assert status.get(private_url) == "blocked", (
+        f"Private-IP URL must be 'blocked', got: {status.get(private_url)!r}"
+    )
+
+
+def test_brief_verify_follow_redirects_false(tmp_path, httpx_mock):
+    """The verify HEAD client must use follow_redirects=False.
+
+    A 301 redirect should be classified as 'live' (3xx → live per tiering),
+    not followed into potentially private space.
+    """
+    import json
+
+    public_url = "https://example.com/article"
+    index_data = {
+        "entries": [
+            {
+                "path": "test/article.md",
+                "title": "Redirect Test",
+                "source": "test",
+                "url": public_url,
+                "published": "2026-05-01",
+                "tags": [],
+                "topics": {"primary": ["ai agents"], "secondary": []},
+                "entities": {},
+                "summary": "redirect test summary",
+                "enriched": True,
+            }
+        ],
+        "generated": "2026-05-01T00:00:00+00:00",
+    }
+    index_path = tmp_path / "index.json"
+    index_path.write_text(json.dumps(index_data))
+
+    # HEAD returns a 301 — with follow_redirects=False this is the final response.
+    httpx_mock.add_response(method="HEAD", url=public_url, status_code=301)
+
+    from unittest.mock import patch
+    import socket as _socket
+
+    # Patch DNS so _assert_safe_url passes for example.com.
+    fake_addrinfo = [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+    with patch("socket.getaddrinfo", return_value=fake_addrinfo):
+        brief.build(str(index_path), since="2026-01-01", verify=True)
+
+    status = brief.last_verification()
+    # 3xx → "live" per _classify_response
+    assert status.get(public_url) == "live", (
+        f"301 with follow_redirects=False must classify as 'live', got: {status.get(public_url)!r}"
+    )

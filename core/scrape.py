@@ -549,6 +549,24 @@ def _default_fetch_youtube(channel_url: str, limit: int) -> list[dict]:
             "YouTube deps not installed. Run: uv sync  (yt-dlp and youtube-transcript-api required)"
         ) from exc
 
+    # Guard: only allow known YouTube hostnames over HTTPS to prevent SSRF via
+    # arbitrary feed_url values being passed to yt-dlp as a shell subprocess.
+    _ALLOWED_YT_HOSTS = frozenset({
+        "www.youtube.com",
+        "youtube.com",
+        "m.youtube.com",
+        "youtu.be",
+    })
+    from urllib.parse import urlparse as _urlparse
+    _parsed_yt = _urlparse(channel_url)
+    if _parsed_yt.scheme != "https" or (_parsed_yt.netloc or "").lower() not in _ALLOWED_YT_HOSTS:
+        logger.error(
+            "youtube adapter: feed_url '%s' is not a valid YouTube URL "
+            "(must be https:// on youtube.com/youtu.be) — skipping source.",
+            channel_url,
+        )
+        return []
+
     # 1. List videos from channel using yt-dlp
     cmd = [
         "yt-dlp",

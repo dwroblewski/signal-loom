@@ -274,3 +274,84 @@ def test_listing_adapter_keyword_filter_before_fetch(tmp_path):
         f"fetch_article should only be called once (pre-filter); got {len(fetch_article_calls)} calls: {fetch_article_calls}"
     )
     assert "transformer" in fetch_article_calls[0].lower()
+
+
+# ---------------------------------------------------------------------------
+# Fix #5 — yt-dlp host whitelist
+# ---------------------------------------------------------------------------
+
+
+def test_youtube_adapter_rejects_non_youtube_feed_url(tmp_path):
+    """YouTube adapter must reject feed_url that is not a YouTube host.
+
+    If a non-YouTube URL (e.g. an SSRF target) is supplied as feed_url,
+    _default_fetch_youtube must return [] and must NOT invoke yt-dlp
+    (which would pass the arbitrary URL to a subprocess).
+    """
+    import subprocess as _subprocess
+    from unittest.mock import patch
+
+    src = config.SourceConfig(
+        name="EvilYT",
+        type="youtube",
+        feed_url="http://169.254.169.254/latest/meta-data/",
+        output_dir=str(tmp_path),
+        tags=["test"],
+    )
+
+    # If subprocess.run is called, the test should fail loudly.
+    with patch.object(_subprocess, "run", side_effect=AssertionError("yt-dlp must not be called for non-YouTube URLs")):
+        result = scrape._default_fetch_youtube("http://169.254.169.254/latest/meta-data/", limit=5)
+
+    assert result == [], "Non-YouTube feed_url must return empty list, not call yt-dlp"
+
+
+def test_youtube_adapter_rejects_http_youtube_url(tmp_path):
+    """YouTube adapter must reject http:// (non-https) YouTube URLs."""
+    import subprocess as _subprocess
+    from unittest.mock import patch
+
+    with patch.object(_subprocess, "run", side_effect=AssertionError("yt-dlp must not be called for http:// URLs")):
+        result = scrape._default_fetch_youtube("http://www.youtube.com/@channel", limit=5)
+
+    assert result == [], "http:// YouTube URL must be rejected"
+
+
+def test_youtube_adapter_accepts_valid_youtube_url(tmp_path, monkeypatch):
+    """YouTube adapter must pass valid https://www.youtube.com/... to yt-dlp."""
+    import subprocess as _subprocess
+
+    # Simulate yt-dlp returning zero results (empty output) so we can verify
+    # it was called without actually running it.
+    ytdlp_called: list[str] = []
+
+    class _FakeResult:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        ytdlp_called.append(cmd[-1])  # last arg is the channel URL
+        return _FakeResult()
+
+    monkeypatch.setattr(_subprocess, "run", fake_run)
+
+    # youtube-transcript-api is also needed — patch the import
+    import sys
+    import types
+    _fake_ytt = types.ModuleType("youtube_transcript_api")
+    _fake_ytt.YouTubeTranscriptApi = object
+    _fake_errors = types.ModuleType("youtube_transcript_api._errors")
+    _fake_errors.NoTranscriptFound = Exception
+    _fake_errors.TranscriptsDisabled = Exception
+    _fake_errors.VideoUnavailable = Exception
+    monkeypatch.setitem(sys.modules, "youtube_transcript_api", _fake_ytt)
+    monkeypatch.setitem(sys.modules, "youtube_transcript_api._errors", _fake_errors)
+
+    valid_url = "https://www.youtube.com/@TestChannel"
+    result = scrape._default_fetch_youtube(valid_url, limit=5)
+
+    assert ytdlp_called == [valid_url], (
+        f"yt-dlp should be called with the valid URL; got: {ytdlp_called}"
+    )
+    assert result == [], "Empty yt-dlp output → empty result list"

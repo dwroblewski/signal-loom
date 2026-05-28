@@ -267,9 +267,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     # 4. Enrich new files                                                  #
     # ------------------------------------------------------------------ #
     if not args.no_enrich and not args.dry_run:
-        # Determine which files need enrichment (new files + any existing
-        # unenriched files in the content dir that were scraped this run)
-        to_enrich = [f for f in all_new_files if _needs_enrichment(f)]
+        # Determine which files need enrichment: ALL *.md under content_dir
+        # that lack enriched: true, not just files scraped this run.
+        # This drains the backlog of files scraped with --no-enrich or that
+        # failed enrichment in a previous run (scrape dedup would skip them
+        # on re-scrape, so we must scan the directory directly).
+        content_dir_path = Path(settings.content_dir)
+        to_enrich = [
+            f for f in sorted(content_dir_path.rglob("*.md"))
+            if _needs_enrichment(f)
+        ]
         logger.info("pipeline: %d file(s) to enrich", len(to_enrich))
 
         if to_enrich:

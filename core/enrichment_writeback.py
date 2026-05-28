@@ -298,12 +298,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command")
 
-    apply_p = sub.add_parser("apply", help="Apply raw YAML from stdin to <file.md>")
+    apply_p = sub.add_parser("apply", help="Apply raw YAML from stdin (or --raw-file) to <file.md>")
     apply_p.add_argument("path", help="Markdown file to update")
     apply_p.add_argument(
         "--config",
         default="config/signal-loom.yaml",
         help="Path to signal-loom.yaml (default: config/signal-loom.yaml)",
+    )
+    apply_p.add_argument(
+        "--raw-file",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Read raw model output from this file instead of stdin. "
+            "Use this to avoid shell-interpolation of model output. "
+            "Never interpolate model output into a shell command."
+        ),
     )
 
     args = parser.parse_args(argv)
@@ -313,7 +323,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     target = Path(args.path)
-    raw_input = sys.stdin.read()
+    if args.raw_file is not None:
+        raw_input = Path(args.raw_file).read_text(encoding="utf-8")
+    else:
+        raw_input = sys.stdin.read()
 
     # Load vocab and aliases via config; fall back to empty on missing files.
     _vocab: set[str] = set()

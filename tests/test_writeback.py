@@ -79,3 +79,89 @@ def test_injected_key_not_written(tmp_path):
     f.write_text("---\ntitle: T\n---\nbody")
     wb.apply(f, raw, vocabulary=VOCAB, aliases={})
     assert "run_command" not in frontmatter.load(str(f)).metadata  # sanitize boundary holds end-to-end
+
+
+# ---------------------------------------------------------------------------
+# Fix #1 — --raw-file CLI option (no shell interpolation)
+# ---------------------------------------------------------------------------
+
+
+def _make_writeback_config(tmp_path) -> str:
+    """Write a minimal signal-loom.yaml + topics.yaml so the CLI can load vocab.
+
+    The vocab includes "ai" to match RAW_OK's topics.primary: [ai].
+    Returns the path to signal-loom.yaml as a str.
+    """
+    import yaml
+
+    topics_path = tmp_path / "topics.yaml"
+    topics_path.write_text(yaml.dump(["ai", "ai agents", "model releases"]))
+
+    aliases_path = tmp_path / "entity-aliases.yaml"
+    aliases_path.write_text("{}\n")
+
+    settings = {
+        "topics_path": str(topics_path),
+        "aliases_path": str(aliases_path),
+        "content_dir": str(tmp_path / "content"),
+        "index_path": str(tmp_path / "index.json"),
+        "sources_path": str(tmp_path / "sources.yaml"),
+    }
+    config_path = tmp_path / "signal-loom.yaml"
+    config_path.write_text(yaml.dump(settings))
+    return str(config_path)
+
+
+def test_main_raw_file_reads_from_file(tmp_path):
+    """The CLI's --raw-file option must read raw model output from a file, not stdin.
+
+    This avoids shell interpolation of model output (the injection vector is
+    echo "<raw>" | ...). With --raw-file, the content is passed via the
+    filesystem rather than shell interpolation.
+    """
+    import sys
+    from io import StringIO
+
+    config = _make_writeback_config(tmp_path)
+
+    # Markdown file to enrich.
+    md = tmp_path / "article.md"
+    md.write_text("---\ntitle: Article\n---\nbody")
+
+    # Raw output in a temp file (not piped via echo).
+    raw_file = tmp_path / "raw_output.txt"
+    raw_file.write_text(RAW_OK)
+
+    # Run CLI with --raw-file; stdin is empty (simulates no pipe).
+    old_stdin = sys.stdin
+    sys.stdin = StringIO("")
+    try:
+        rc = wb.main(["apply", str(md), "--config", config, "--raw-file", str(raw_file)])
+    finally:
+        sys.stdin = old_stdin
+
+    assert rc == 0, "CLI must succeed with --raw-file"
+    post = frontmatter.load(str(md))
+    assert post.metadata.get("enriched") is True, "File must be enriched via --raw-file"
+
+
+def test_main_stdin_still_works(tmp_path):
+    """The CLI must still accept raw model output from stdin when --raw-file is not given."""
+    import sys
+    from io import StringIO
+
+    config = _make_writeback_config(tmp_path)
+
+    md = tmp_path / "article.md"
+    md.write_text("---\ntitle: Article\n---\nbody")
+
+    old_stdin = sys.stdin
+    sys.stdin = StringIO(RAW_OK)
+    try:
+        rc = wb.main(["apply", str(md), "--config", config])
+    finally:
+        sys.stdin = old_stdin
+
+    assert rc == 0, "CLI must succeed reading from stdin"
+    post = frontmatter.load(str(md))
+    assert post.metadata.get("enriched") is True

@@ -25,9 +25,20 @@ Enriches scraped markdown files that lack an enrichment block, by dispatching pa
    Each sub-agent returns a single ```yaml block. Use the configured `enrichment_model` for the dispatch.
 
 4. **Hand each raw result to writeback — do not transform it:**
+
+   > **Security rule: never interpolate model output into a shell command.**
+   > Write the sub-agent's raw output to a temp file first, then pass the temp
+   > file path to writeback via `--raw-file`. This prevents `$(…)`/backtick
+   > command injection from untrusted model responses.
+
+   ```bash
+   # Write the raw sub-agent output to a temp file (never echo it into a shell)
+   _tmpfile=$(mktemp)
+   printf '%s' "<raw output from sub-agent>" > "$_tmpfile"
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.enrichment_writeback apply "<path/to/file.md>" --raw-file "$_tmpfile"
+   rm -f "$_tmpfile"
    ```
-   echo "<raw yaml from sub-agent>" | uv run --project ${CLAUDE_PLUGIN_ROOT} python -m core.enrichment_writeback apply "<path/to/file.md>"
-   ```
+
    Writeback validates against the schema (dropping any non-allow-listed keys), normalizes entities, and writes atomically. A malformed result is skipped and logged to the re-run queue — never crash the batch.
 
 5. **Report** how many files were enriched, how many were skipped, and surface any entries in the re-run queue (`failed-enrichments.jsonl`).

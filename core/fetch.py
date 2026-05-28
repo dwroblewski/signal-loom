@@ -33,8 +33,13 @@ SSRF guard:
   _assert_safe_url() is called before every outbound HTTP request and on each
   redirect Location before following it. It rejects non-http(s) schemes,
   private/loopback/link-local/reserved/multicast IPs, and known cloud-metadata
-  hostnames. On DNS resolution failure the guard fails OPEN (logs a warning)
-  to avoid breaking test environments where mocked hostnames do not resolve.
+  hostnames. On DNS resolution failure the guard FAILS CLOSED (raises
+  BlockedURLError) — an unresolvable hostname cannot be verified as safe.
+
+  Known residual limitation: full DNS-rebinding protection requires pinning the
+  resolved IP at connect time (custom transport) so the IP checked here is the
+  same one used for the TCP connection. For hostile multi-tenant environments
+  an OS/container-level egress firewall is recommended as an additional layer.
 """
 
 import html as _html_module
@@ -137,13 +142,12 @@ def _assert_safe_url(url: str) -> None:
     try:
         addrinfos = socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
-        # DNS lookup failed — fail OPEN so mocked test hosts don't block runs.
-        logger.warning(
-            "_assert_safe_url: DNS resolution failed for '%s' (%s) — skipping IP check.",
-            host,
-            exc,
-        )
-        return
+        # DNS lookup failed — fail CLOSED. An unresolvable hostname cannot be
+        # verified as safe, so we refuse rather than allow blindly.
+        raise BlockedURLError(
+            f"Blocked URL '{url}': DNS resolution failed for '{host}' ({exc}) — "
+            "cannot verify host is safe."
+        ) from exc
 
     for addrinfo in addrinfos:
         addr_str = addrinfo[4][0]
@@ -284,6 +288,9 @@ def _fetch_browser_html(
             "playwright is not installed. Install with: uv sync --extra browser"
         )
 
+    # SSRF guard: validate the target URL before launching the browser.
+    _assert_safe_url(url)
+
     from playwright.sync_api import TimeoutError as PWTimeout, sync_playwright
 
     def _route(route):  # type: ignore[no-untyped-def]
@@ -292,6 +299,11 @@ def _fetch_browser_html(
             return route.abort()
         host = req.url.split("/", 3)[2] if "://" in req.url else ""
         if any(blocked in host for blocked in _BLOCKED_URL_HOSTS):
+            return route.abort()
+        # SSRF guard: block redirects/subresources to private IPs.
+        try:
+            _assert_safe_url(req.url)
+        except BlockedURLError:
             return route.abort()
         return route.continue_()
 
@@ -305,7 +317,15 @@ def _fetch_browser_html(
                     page = context.new_page()
                     page.route("**/*", _route)
                     page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
-                    return page.content(), None
+                    html = page.content()
+                    # Cap response size to prevent memory exhaustion.
+                    if html and len(html.encode("utf-8", errors="replace")) > _MAX_RESPONSE_BYTES:
+                        logger.warning(
+                            "_fetch_browser_html: page content for %s exceeds 10 MB — truncating.",
+                            url,
+                        )
+                        html = html[: _MAX_RESPONSE_BYTES]
+                    return html, None
                 finally:
                     browser.close()
         except PWTimeout:

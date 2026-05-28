@@ -27,6 +27,8 @@ from typing import Any
 import httpx
 
 from core import query
+from core.fetch import BlockedURLError
+from core import fetch as _fetch_mod
 
 # ---------------------------------------------------------------------------
 # Module-level state
@@ -59,9 +61,17 @@ def _head_check(urls: list[str]) -> dict[str, str]:
     - network error, timeout, 5xx → "stale"
     """
     results: dict[str, str] = {}
-    with httpx.Client(timeout=_HEAD_TIMEOUT, follow_redirects=True) as client:
+    # follow_redirects=False: a 3xx is treated as live per tiering logic below;
+    # we must NOT chase redirects into private address space (SSRF).
+    with httpx.Client(timeout=_HEAD_TIMEOUT, follow_redirects=False) as client:
         for url in urls:
             if not url:
+                continue
+            # SSRF guard: reject private/internal URLs before issuing any request.
+            try:
+                _fetch_mod._assert_safe_url(url)
+            except BlockedURLError:
+                results[url] = "blocked"
                 continue
             try:
                 resp = client.head(url)
@@ -103,6 +113,7 @@ _TIER_ICON = {
     "live": "✓ live",
     "stale": "⚠ stale",
     "dead": "✗ dead",
+    "blocked": "✗ blocked",
 }
 
 

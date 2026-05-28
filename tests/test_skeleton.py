@@ -9,10 +9,11 @@ import pytest
 
 
 @pytest.mark.skeleton
-def test_endtoend_contract(tmp_path):
+def test_endtoend_contract(tmp_path, monkeypatch):
     pytest.importorskip("core.pipeline")  # skips until D3
     from core import pipeline
 
+    monkeypatch.chdir(tmp_path)  # so relative output_dir in sources.yaml resolves
     rc = pipeline.main([
         "--config", _stub_config(tmp_path),
         "--once",
@@ -46,7 +47,9 @@ def _stub_config(tmp_path) -> str:
             "name": "Test Source",
             "type": "rss",
             "feed_url": "https://fixture.example.com/feed",
-            "output_dir": str(content_dir),
+            # Relative path — passes load_sources containment check (fix #6).
+            # Resolves against CWD, which callers set to tmp_path via monkeypatch.chdir().
+            "output_dir": "content/test-source",
             "tags": ["ai"],
             "scrape_limit": 5,
             "enabled": True,

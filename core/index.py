@@ -13,20 +13,36 @@ construction.
 from __future__ import annotations
 
 import json
+import logging
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union
 
 import frontmatter  # python-frontmatter
 
+logger = logging.getLogger(__name__)
+
 
 def _ensure_list(val: object) -> list:
-    """Return *val* as a list, coercing str → [str] and None → []."""
+    """Return *val* as a list, coercing str → [str] and None → [].
+
+    Type-defensive: non-string iterables that are not lists (e.g. int, dict,
+    None) are returned as [] rather than crashing the index build.
+    A bare string is wrapped in a single-element list.
+    """
     if val is None:
         return []
     if isinstance(val, str):
         return [val]
-    return list(val)
+    if isinstance(val, (int, float, bool, dict)):
+        # Non-iterable scalar or dict — cannot meaningfully coerce to list.
+        return []
+    try:
+        return list(val)
+    except TypeError:
+        return []
 
 
 def _build_entry(md_path: Path, content_dir: Path) -> dict | None:
@@ -104,7 +120,11 @@ def build_index(
 
     entries: list[dict] = []
     for md_path in sorted(content_dir.rglob("*.md")):
-        entry = _build_entry(md_path, content_dir)
+        try:
+            entry = _build_entry(md_path, content_dir)
+        except Exception as exc:
+            logger.warning("index: skipping malformed file %s: %s", md_path, exc)
+            entry = None
         if entry is not None:
             entries.append(entry)
 
@@ -117,7 +137,21 @@ def build_index(
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(result, indent=2))
+
+    # Atomic write: write to temp file in same directory, then os.replace.
+    tmp_path_str: str | None = None
+    try:
+        fd, tmp_path_str = tempfile.mkstemp(dir=out_path.parent, suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(result, indent=2))
+        os.replace(tmp_path_str, out_path)
+        tmp_path_str = None  # replaced successfully — no cleanup needed
+    finally:
+        if tmp_path_str is not None:
+            try:
+                os.unlink(tmp_path_str)
+            except OSError:
+                pass
 
     return result
 

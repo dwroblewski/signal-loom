@@ -130,11 +130,14 @@ def test_ssrf_allows_public_http():
         _assert_safe_url("http://example.com/rss")  # Must not raise
 
 
-def test_ssrf_fails_open_on_dns_error():
-    """When DNS resolution fails, the guard must fail OPEN (no BlockedURLError raised)."""
+def test_ssrf_fails_closed_on_dns_error():
+    """When DNS resolution fails, the guard must fail CLOSED (raise BlockedURLError).
+
+    An unresolvable hostname cannot be verified as safe, so the guard refuses.
+    """
     with patch("socket.getaddrinfo", side_effect=socket.gaierror("nxdomain")):
-        # Should NOT raise — fail open on resolution error.
-        _assert_safe_url("https://x.test/article")  # Must not raise
+        with pytest.raises(BlockedURLError, match="DNS resolution failed"):
+            _assert_safe_url("https://x.test/article")
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +150,9 @@ def test_fetch_article_direct_rejects_oversized_response(httpx_mock):
     oversized_body = "A" * (_MAX_RESPONSE_BYTES + 1)
     httpx_mock.add_response(url="https://x.test/huge", text=oversized_body)
     from core.fetch import fetch_article_direct
-    result = fetch_article_direct("https://x.test/huge")
+    # Monkeypatch DNS so the SSRF guard (now fail-CLOSED) passes for the test host.
+    with patch("socket.getaddrinfo", side_effect=_fake_getaddrinfo_public):
+        result = fetch_article_direct("https://x.test/huge")
     assert result is None, "Oversized response should be rejected and return None"
 
 
