@@ -118,18 +118,29 @@ ai_daily_brief_listing:
 #   scrape_limit: 8
 #   enabled: true
 
-# ── Example domain: FINANCE (quant + macro/fundamental) ─────────────────────
-# All feeds below were verified live. Pair with a finance topics.yaml, e.g.:
-#   - asset pricing
+# ── Example domain: investment research (sell-side/buy-side desks) ──────────
+# All feeds below were verified live. Pair with a topics.yaml in desk language —
+# the controlled vocab is what clusters papers into a usable read. Suggested:
+#   # systematic / quant
+#   - factor premia
+#   - cross-sectional equity signals
+#   - statistical arbitrage
 #   - market microstructure
-#   - portfolio construction
-#   - factor investing
-#   - risk and volatility
-#   - derivatives and options
-#   - monetary policy
-#   - inflation
-#   - financial stability
-#   - macro and growth
+#   - execution and transaction costs
+#   - volatility surface and options
+#   - derivatives pricing
+#   - regime and time-series modeling
+#   - machine learning signals
+#   - alternative data
+#   # macro / discretionary / fundamental
+#   - monetary policy and the path of rates
+#   - inflation and the yield curve
+#   - credit and spreads
+#   - financial stability and systemic risk
+#   - global macro and FX
+#   - growth and the business cycle
+#   - valuation and capital allocation
+#   - earnings quality and fundamentals
 # and entity-aliases.yaml, e.g.:  Federal Reserve: Fed ; European Central Bank: ECB
 #
 # ---- For QUANTS (methods, microstructure, pricing, risk) ----
@@ -141,7 +152,7 @@ ai_daily_brief_listing:
 #   type: rss
 #   feed_url: https://rss.arxiv.org/rss/q-fin.PM
 #   output_dir: content/qfin-portfolio
-#   tags: [quant, portfolio]
+#   tags: [systematic, factors]
 #   perspective: researcher
 #   scrape_limit: 15
 #   enabled: true
@@ -160,7 +171,7 @@ ai_daily_brief_listing:
 #   type: rss
 #   feed_url: https://rss.arxiv.org/rss/q-fin.RM
 #   output_dir: content/qfin-risk
-#   tags: [quant, risk]
+#   tags: [systematic, risk, tail-risk]
 #   scrape_limit: 10
 #   enabled: true
 #
@@ -169,7 +180,7 @@ ai_daily_brief_listing:
 #   type: rss
 #   feed_url: https://rss.arxiv.org/rss/q-fin.PR
 #   output_dir: content/qfin-pricing
-#   tags: [quant, derivatives, pricing]
+#   tags: [systematic, derivatives, vol]
 #   scrape_limit: 10
 #   enabled: true
 #
