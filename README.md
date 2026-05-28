@@ -4,11 +4,43 @@ A personal intelligence pipeline: **declarative sources → scrape → AI-enrich
 
 Point it at the feeds, channels, and blogs you follow; it scrapes new items, enriches each with structured metadata (summary, topics, entities), builds a queryable index, and produces a verified daily brief grouped by topic. Domain-agnostic — bring your own sources and your own topic vocabulary (AI, climate, finance, healthcare, whatever you track).
 
-Ships two ways from one repo:
-- **A Claude Code plugin** — the interactive interface (`/pipeline`, `/enrich`, `/brief`).
-- **A pip-installable Python core** — the same pipeline headless, for cron/launchd (`python -m core.pipeline`).
+Ships three ways from one repo:
+- **A Codex plugin** — `$signal-loom-pipeline`, `$signal-loom-enrich`, and `$signal-loom-brief`; Codex does interactive model work through the active Codex session.
+- **A Claude Code plugin** — `/pipeline`, `/enrich`, and `/brief`; Claude sub-agents handle interactive enrichment.
+- **A pip-installable Python core** — the same scrape/enrich/index/brief pipeline headless, for cron/launchd (`python -m core.pipeline`).
 
 ---
+
+## Quickstart (Codex plugin)
+
+The Codex path is the seat-auth path: Python emits bounded work packets,
+validates model output, writes frontmatter, and builds the index. Codex itself
+does the model work in your active Codex session. The plugin code does not read
+`~/.codex/auth.json` and does not require `OPENAI_API_KEY`, `CODEX_API_KEY`, or
+`ANTHROPIC_API_KEY` for Codex-native enrichment.
+
+For local e2e verification from this checkout:
+
+```bash
+uv run python scripts/codex_plugin_e2e.py
+```
+
+For manual Codex runs, start Codex with API-key variables removed and isolate
+zsh startup so local shell profiles cannot re-export them:
+
+```bash
+ZDOTDIR="$(mktemp -d)" \
+env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY \
+codex exec \
+  --enable plugins \
+  --enable hooks \
+  -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]' \
+  '$signal-loom-pipeline refresh my sources'
+```
+
+Current Codex CLI builds may not fire plugin `SessionStart` hooks. The runtime
+commands still lazy-bootstrap `config/*.yaml` from examples before use; the e2e
+harness records whether hook bootstrap was observed.
 
 ## Quickstart (Claude Code plugin)
 
@@ -19,7 +51,7 @@ Ships two ways from one repo:
 
 Then, in a session:
 
-1. **Set your key** — `export ANTHROPIC_API_KEY=sk-ant-...` (enrichment runs against the Anthropic API; see [Cost](#cost)).
+1. **Set your key** — `export ANTHROPIC_API_KEY=sk-ant-...` (Claude/headless API enrichment runs against the Anthropic API; see [Cost](#cost)).
 2. **Configure your sources** — on first session the plugin creates `config/*.yaml` from the examples automatically. Edit them (your editor / ask Claude to open `${CLAUDE_PLUGIN_ROOT}/config/sources.yaml`). If you want durable config that survives plugin updates, set `SIGNAL_LOOM_CONFIG=/stable/path/signal-loom.yaml`.
 3. **Run it** — `/pipeline` scrapes new items, asks before enriching (cost-aware), and rebuilds the index. Then `/brief --verify` for a topic-grouped digest with live-link checks.
 
@@ -119,7 +151,11 @@ The default install is free and key-light (only an LLM key). Heavier capabilitie
 
 ## Cost
 
-Headless / non–Claude-Code enrichment hits the Anthropic API. **Measured 2026-05-27** on real full-length Substack articles via `claude-sonnet-4-6` (avg ~6.3K input + ~0.9K output tokens/article):
+Headless enrichment and any explicit Anthropic API run hit the Anthropic API.
+The Codex-native plugin path does not call OpenAI or Anthropic APIs from Python;
+it uses the active Codex session for model work. **Measured 2026-05-27** on real
+full-length Substack articles via `claude-sonnet-4-6` (avg ~6.3K input + ~0.9K
+output tokens/article):
 
 | Model | $/article | @20 articles/day | @50/day |
 |---|---|---|---|
@@ -150,7 +186,9 @@ signal-loom is extracted from a personal Obsidian-vault pipeline. Intentional si
 
 - **Tags live in frontmatter** (`tags: [...]`), not line-1 hashtags.
 - **Enrichment schema is "rich-minimal"** — dropped the vault's `relevance` scoring, `content_type`, `claims`, and AI-specific canonical-entity *content*. Kept the *mechanisms*: a user-supplied controlled topic vocabulary and an entity-alias map.
-- **`ANTHROPIC_API_KEY` is the default** for every path. `claude -p` is not shipped as a backend (subscription use is personal, not for distributed tooling). The only free path is enriching interactively inside your own Claude Code session via sub-agents.
+- **Headless API enrichment remains Anthropic-backed.** `ANTHROPIC_API_KEY` is required when `core.pipeline` runs enrichment without `--no-enrich`.
+- **Interactive Claude and Codex paths stay separate.** Claude Code uses top-level `skills/` and `hooks/hooks.json`; Codex uses `.codex-plugin/plugin.json`, `codex/skills/`, and `hooks/codex-hooks.json`.
+- **Codex-native enrichment uses the active Codex session.** Python never reads Codex auth files or requires API keys on that path; use the guarded launch form above if your login shell exports API keys.
 
 ---
 
@@ -160,6 +198,7 @@ signal-loom is extracted from a personal Obsidian-vault pipeline. Intentional si
 uv sync --extra dev
 uv run pytest -q            # full suite
 uv run pytest -m skeleton   # the end-to-end contract test
+uv run python scripts/codex_plugin_e2e.py  # real Codex plugin install/use/writeback smoke
 ```
 
 **Reproducible installs:** use `uv sync` (reads `uv.lock`) rather than `pip install -e .` — `pyproject.toml` dependency floors are intentionally open-ended for compatibility, while `uv.lock` pins the exact versions used in development and CI.

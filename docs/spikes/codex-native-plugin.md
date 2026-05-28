@@ -23,6 +23,28 @@ Codex plugin code must not read `~/.codex/auth.json` or require API keys for the
 Codex-native path. The only model work in the Codex-native path happens inside
 the Codex agent session or a trusted `codex exec` invocation.
 
+Real e2e testing found one important shell boundary: Codex shell commands may
+run through the user's login shell, and that shell startup can re-export
+`OPENAI_API_KEY` after the outer `codex exec` process removed it. The hardened
+launch pattern is:
+
+```bash
+ZDOTDIR="$(mktemp -d)" \
+env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY \
+codex exec \
+  --enable plugins \
+  --enable hooks \
+  -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","ANTHROPIC_API_KEY"]' \
+  '$signal-loom-pipeline refresh my sources'
+```
+
+Inside skills, every signal-loom Python command also runs through a guarded
+child shell:
+
+```bash
+ROOT="$ROOT" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" ...'
+```
+
 ## Regression Boundary
 
 The Anthropic API path remains unchanged:
@@ -37,13 +59,26 @@ The Anthropic API path remains unchanged:
 
 - Focused compatibility tests: `uv run pytest tests/test_codex_plugin.py tests/test_bootstrap.py tests/test_enrichment_packets.py`
 - Full regression suite: `uv run pytest`
-- Result: 172 passed, 1 deselected.
+- Original spike result: 172 passed, 1 deselected.
+- Hardening result after real e2e harness and queue changes: 180 passed, 1
+  deselected.
+- Real plugin e2e harness: `uv run python scripts/codex_plugin_e2e.py`
+- The e2e installs the local checkout through a temporary Codex marketplace,
+  invokes the installed `$signal-loom-enrich` skill, verifies guarded child
+  env absence for API-key variables, applies writeback, rebuilds the index, and
+  verifies `enriched: true`.
 
 ## Residuals
 
 - Codex documents `PLUGIN_ROOT` for plugin hooks, not arbitrary skill shell
-  commands. The Codex skills therefore instruct the agent to derive `ROOT` from
-  the loaded skill file path when `PLUGIN_ROOT` is absent.
+  commands. The Codex skills therefore resolve `ROOT` from `PLUGIN_ROOT`, an
+  explicit installed root, the current checkout, or the newest installed
+  `~/.codex/plugins/cache/*/signal-loom/*` cache.
 - This spike does not add unattended OpenAI API enrichment. That is intentional:
   the Codex-native path uses the active Codex session for model work so it can
   leverage ChatGPT/Codex account auth without exposing tokens to plugin code.
+- Codex CLI 0.134 did not fire this plugin's `SessionStart` hook in local
+  characterization runs, even with plugins, hooks, and trust bypass enabled.
+  Runtime commands therefore keep `ensure_configs(...)` lazy-bootstrap as the
+  supported path. The e2e harness records `hook_bootstrap` and has a
+  `--require-hook` mode for future CLI versions.

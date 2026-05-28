@@ -26,6 +26,8 @@
       "Interactive enrichment",
       "Brief generation"
     ],
-    "defaultPrompt": "$signal-loom-pipeline refresh my sources"
+    "defaultPrompt": [
+      "$signal-loom-pipeline refresh my sources"
+    ]
   }
 }

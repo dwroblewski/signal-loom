@@ -192,6 +192,37 @@ class TestEnrichmentWritebackCLI:
         assert result.returncode == 1
         assert md.read_text() == original_content  # file untouched
 
+    def test_apply_garbage_stdin_appends_failed_queue(self, tmp_path):
+        """Single-file CLI failures are queued for Codex interactive reruns."""
+        md = self._make_md(tmp_path)
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        cfg = _make_config(
+            config_dir,
+            content_dir=tmp_path / "content",
+            index_path=tmp_path / "index.json",
+        )
+        queue = tmp_path / "failed-enrichments.jsonl"
+
+        result = _run(
+            "core.enrichment_writeback",
+            [
+                "apply",
+                str(md),
+                "--config",
+                str(cfg),
+                "--failed-queue",
+                str(queue),
+            ],
+            stdin="not enrichment yaml",
+        )
+
+        assert result.returncode == 1
+        rows = [json.loads(line) for line in queue.read_text().splitlines()]
+        assert rows[0]["path"] == str(md)
+        assert rows[0]["errors"]
+        assert "queued failed enrichment" in result.stderr
+
     def test_no_subcommand_exits_nonzero(self, tmp_path):
         """Calling without subcommand prints help and exits non-zero."""
         result = _run("core.enrichment_writeback", [])

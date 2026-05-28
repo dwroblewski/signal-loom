@@ -225,6 +225,27 @@ def apply(
 _FAILED_QUEUE = Path("failed-enrichments.jsonl")
 
 
+def default_failed_queue_path(config_path: Path) -> Path:
+    """Return the default failed-enrichment queue beside the active data root."""
+    config_path = Path(config_path)
+    if config_path.parent.name == "config":
+        return config_path.parent.parent / _FAILED_QUEUE.name
+    return config_path.parent / _FAILED_QUEUE.name
+
+
+def append_failed_queue(
+    path: Path,
+    errors: list[str],
+    *,
+    queue_path: Path | None = None,
+) -> None:
+    """Append one failed enrichment entry to the re-run queue."""
+    target_queue = Path(queue_path) if queue_path is not None else _FAILED_QUEUE
+    target_queue.parent.mkdir(parents=True, exist_ok=True)
+    with target_queue.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"path": str(path), "errors": errors}) + "\n")
+
+
 def apply_batch(
     mapping: dict[Path, str],
     *,
@@ -266,9 +287,8 @@ def apply_batch(
     # Write re-run queue.
     if failed:
         try:
-            with _FAILED_QUEUE.open("a", encoding="utf-8") as fh:
-                for p in failed:
-                    fh.write(json.dumps({"path": str(p)}) + "\n")
+            for p in failed:
+                append_failed_queue(p, [], queue_path=_FAILED_QUEUE)
         except OSError as exc:
             logger.warning("could not write failed-enrichments queue: %s", exc)
 
@@ -315,6 +335,15 @@ def main(argv: list[str] | None = None) -> int:
             "Never interpolate model output into a shell command."
         ),
     )
+    apply_p.add_argument(
+        "--failed-queue",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Append validation failures to this queue. Defaults to "
+            "failed-enrichments.jsonl beside the active signal-loom root."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -340,6 +369,11 @@ def main(argv: list[str] | None = None) -> int:
 
     config_path = resolve_config_path(args.config)
     ensure_configs(config_path.parent)
+    failed_queue = (
+        Path(args.failed_queue)
+        if args.failed_queue is not None
+        else default_failed_queue_path(config_path)
+    )
 
     if not config_path.exists():
         print(
@@ -372,6 +406,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         for err in res.errors:
             print(err, file=sys.stderr)
+        try:
+            append_failed_queue(target, res.errors, queue_path=failed_queue)
+            print(f"queued failed enrichment: {failed_queue}", file=sys.stderr)
+        except OSError as exc:
+            print(f"could not write failed-enrichments queue: {exc}", file=sys.stderr)
         return 1
 
 

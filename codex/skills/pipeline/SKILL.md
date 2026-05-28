@@ -13,10 +13,10 @@ Run the scrape -> optional Codex-native enrich -> index loop from Codex.
 
 2. Scrape and index without paid API enrichment:
    ```bash
-   uv run --project "$ROOT" python -m core.pipeline \
+   ROOT="$ROOT" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.pipeline \
        --once \
        --no-enrich \
-       --config "$ROOT/config/signal-loom.yaml"
+       --config "$ROOT/config/signal-loom.yaml"'
    ```
 
 3. If unenriched files remain, ask whether to enrich now. Use

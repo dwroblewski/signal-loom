@@ -13,17 +13,17 @@ Render the grouped markdown digest from the signal-loom index.
 
 2. Run the brief:
    ```bash
-   uv run --project "$ROOT" python -m core.brief \
+   ROOT="$ROOT" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.brief \
        --config "$ROOT/config/signal-loom.yaml" \
-       --since 7d
+       --since 7d'
    ```
 
 3. For shareable or archived briefs, offer link verification:
    ```bash
-   uv run --project "$ROOT" python -m core.brief \
+   ROOT="$ROOT" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.brief \
        --config "$ROOT/config/signal-loom.yaml" \
        --since 7d \
-       --verify
+       --verify'
    ```
 
 ## Rules
