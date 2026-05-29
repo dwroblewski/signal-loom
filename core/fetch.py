@@ -1,6 +1,6 @@
 """core/fetch.py — Network fetch layer for signal-loom.
 
-Adapted from an internal content pipeline.
+Adapted from an earlier content pipeline.
 
 Provides:
   fetch_article_direct     — httpx + trafilatura, fast path (~500ms-3s p50)
@@ -275,7 +275,7 @@ def _fetch_browser_html(
 
     Raises BrowserExtraMissing if playwright is not installed.
 
-    Hardening (adapted from an internal content pipeline):
+    Hardening (adapted from an earlier content pipeline):
       - User-Agent matches the direct-HTTP path.
       - Blocks images/media/fonts and known analytics/tracker hosts.
       - wait_until="domcontentloaded" (not networkidle).

@@ -194,7 +194,7 @@ This folder is a portable Codex local marketplace and VS Code workspace source.
 - The staged Codex plugin version is `{codex_plugin_version}` so Codex refreshes
   its cache when you install this transfer bundle.
 
-## Work-computer setup
+## Setup On Another Machine
 
 1. Install prerequisites: Codex CLI/app, VS Code, Python 3.12+, and `uv`.
 2. Open the source folder:

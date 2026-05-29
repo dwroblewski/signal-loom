@@ -24,7 +24,7 @@ The package excludes `.git`, `.venv`, caches, `.env`, generated `content/`,
 files. That keeps personal feeds, local paths, generated notes, and credentials
 off the transfer artifact.
 
-## Install On The Work Computer
+## Install On Another Machine
 
 Prerequisites:
 
@@ -100,7 +100,7 @@ The Codex-native path does not need `OPENAI_API_KEY`, `CODEX_API_KEY`, or
 `ANTHROPIC_API_KEY`; model work happens in the active Codex session. The
 headless Python enrichment path still requires `ANTHROPIC_API_KEY`.
 
-## Updating The Work Computer Later
+## Updating Another Machine Later
 
 Build a new transfer archive and repeat the marketplace add/install commands.
 The package builder stamps the staged `.codex-plugin/plugin.json` version with a

@@ -1,6 +1,6 @@
 """core/scrape.py — Source adapters: RSS, YouTube, and listing page scrapers.
 
-Adapted from an internal content pipeline.
+Adapted from an earlier content pipeline.
 
 Key differences from the vault source:
   - No podcast adapter (v1.1).
@@ -525,7 +525,7 @@ def _default_fetch_article(url: str) -> Optional[str]:
 def _default_fetch_youtube(channel_url: str, limit: int) -> list[dict]:
     """Default YouTube captions fetcher using yt-dlp + youtube-transcript-api.
 
-    Adapted from an internal content pipeline:
+    Adapted from an earlier content pipeline:
       - yt-dlp lists videos from the channel (flat-playlist, dump-json)
       - youtube-transcript-api fetches captions per video ID
       - Prefer manual EN transcripts; fall back to auto-generated; fall back

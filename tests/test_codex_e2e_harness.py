@@ -15,12 +15,8 @@ spec.loader.exec_module(codex_plugin_e2e)
 
 
 def test_scrub_env_removes_api_key_variables():
-    env = {
-        "OPENAI_API_KEY": "secret",
-        "CODEX_API_KEY": "secret",
-        "ANTHROPIC_API_KEY": "secret",
-        "PATH": "/bin",
-    }
+    env = {key: "dummy-value" for key in codex_plugin_e2e.FORBIDDEN_ENV_KEYS}
+    env["PATH"] = "/bin"
 
     cleaned = codex_plugin_e2e.scrub_env(env)
 
