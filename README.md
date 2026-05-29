@@ -1,13 +1,79 @@
 # signal-loom
 
-A personal intelligence pipeline: **declarative sources → scrape → AI-enrich → index → brief.**
+**Turn the sources you already follow into a small, searchable research library
+and a brief you can read.**
 
-Point it at the feeds, channels, and blogs you follow; it scrapes new items, enriches each with structured metadata (summary, topics, entities), builds a queryable index, and produces a verified daily brief grouped by topic. Domain-agnostic — bring your own sources and your own topic vocabulary (AI, climate, finance, healthcare, whatever you track).
+Signal Loom watches the feeds, channels, blogs, and listing pages you care
+about. It saves new items as plain Markdown, asks a model to add useful
+metadata, validates that metadata, builds a queryable index, and renders a
+topic-grouped brief.
 
-Ships three ways from one repo:
-- **A Codex plugin** — `$pipeline`, `$enrich`, and `$brief`; Codex does interactive model work through the active Codex session.
-- **A Claude Code plugin** — `/pipeline`, `/enrich`, and `/brief`; Claude sub-agents handle interactive enrichment.
-- **A pip-installable Python core** — the same scrape/enrich/index/brief pipeline headless, for cron/launchd (`python -m core.pipeline`).
+The intent is simple: keep your information diet out of a black box. Sources,
+topics, aliases, generated notes, and briefs are all files you can inspect,
+edit, commit, sync, or point Obsidian/static-site tooling at.
+
+## What It Is For
+
+Signal Loom is useful when you have a recurring set of sources and want to know:
+
+- What changed since I last checked?
+- Which items belong to the same topic across different sources?
+- What are the important entities, summaries, and takeaways?
+- Can I keep the output in my own files instead of a closed dashboard?
+
+It is domain-agnostic. Bring your own sources and your own topic vocabulary:
+AI, climate, finance, healthcare, policy, local news, research papers, or
+anything else that works as feeds, channels, pages, or articles.
+
+## How It Works
+
+```mermaid
+flowchart LR
+    Sources["config/sources.yaml<br/>Feeds, channels, pages"] --> Fetch["Fetch + scrape<br/>RSS, YouTube, listings"]
+    Fetch --> Notes["Markdown notes<br/>content/"]
+    Notes --> Enrich{"Enrich?"}
+    Enrich -->|"Codex, Claude, or API"| Metadata["Validated metadata<br/>summary, topics, entities"]
+    Enrich -->|"--no-enrich"| Index["index.json<br/>Queryable catalog"]
+    Metadata --> Index
+    Index --> Brief["Brief<br/>Topic-grouped digest"]
+```
+
+The model is not trusted with the whole system. Python owns the mechanical
+parts: fetching, writing files, validating model output, normalizing entities,
+building the index, and rendering briefs. The model only fills bounded
+enrichment packets, and its response is parsed before anything is written.
+
+## Design Principles
+
+- **Plain files first.** Output is Markdown plus YAML frontmatter in `content/`,
+  with a JSON index beside it.
+- **Configuration over code.** Add sources, topic vocabulary, aliases, and paths
+  in YAML.
+- **One core, multiple front doors.** Codex, Claude Code, and headless Python
+  all use the same core pipeline.
+- **Cheap and inspectable by default.** Start with `--no-enrich` to prove your
+  sources before spending on API enrichment.
+- **Model output is data, not instructions.** Enrichment results go through an
+  allow-list validator before writeback.
+
+## Ways To Run It
+
+```mermaid
+flowchart TB
+    Core["Python core<br/>scrape, validate, index, brief"]
+    Codex["Codex plugin<br/>$pipeline, $enrich, $brief"] --> Core
+    Claude["Claude Code plugin<br/>/pipeline, /enrich, /brief"] --> Core
+    Headless["Headless Python<br/>python -m core.pipeline"] --> Core
+    Codex --> CodexModel["Model work in active Codex session<br/>no API key required by Python"]
+    Claude --> ClaudeModel["Claude interactive path<br/>or Anthropic API for headless enrichment"]
+    Headless --> ApiModel["Scheduled runs<br/>API enrichment optional"]
+```
+
+| Path | Best for | Model/auth behavior |
+|---|---|---|
+| **Codex plugin** | Interactive use in Codex with `$pipeline`, `$enrich`, and `$brief` | Codex does model work through the active session. Python does not read Codex auth files or require API keys for Codex-native enrichment. |
+| **Claude Code plugin** | Interactive use in Claude Code with `/pipeline`, `/enrich`, and `/brief` | Claude sub-agents handle interactive enrichment. |
+| **Headless Python** | Cron, launchd, CI-like checks, or plain local runs | `--no-enrich` is free. API enrichment uses Anthropic and requires `ANTHROPIC_API_KEY`. |
 
 ---
 
@@ -48,6 +114,21 @@ harness records whether hook bootstrap was observed.
 `allow_login_shell=false` narrows Codex shell startup, but it does not replace
 `ZDOTDIR` on this machine; zsh startup can still re-export keys without the
 isolated dotdir.
+
+### Transfer to another Codex + VS Code machine
+
+Build a portable local-marketplace package:
+
+```bash
+uv run python scripts/make_transfer_package.py
+```
+
+Send the resulting `dist/signal-loom-codex-vscode-<timestamp>.tar.gz` file to
+the other computer. It includes the source, Codex plugin manifest/skills, hooks,
+tests, VS Code task hints, example config, and `uv.lock`; it excludes `.venv`,
+`.git`, `.env`, generated content/index files, failed-enrichment logs, and real
+non-example `config/*.yaml` files. Setup details live in
+[`docs/transfer/codex-vscode-workstation.md`](docs/transfer/codex-vscode-workstation.md).
 
 ## Quickstart (Claude Code plugin)
 

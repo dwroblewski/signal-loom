@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "uv sync (dev)",
+      "type": "shell",
+      "command": "uv sync --extra dev",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "pytest",
+      "type": "shell",
+      "command": "uv run pytest -q",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "codex plugin e2e",
+      "type": "shell",
+      "command": "uv run python scripts/codex_plugin_e2e.py",
+      "problemMatcher": []
+    }
+  ]
+}
