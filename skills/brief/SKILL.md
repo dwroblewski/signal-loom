@@ -7,18 +7,28 @@ description: Build a grouped markdown digest of recent signals from the index, w
 
 Reads the signal-loom index, groups entries by their controlled-vocabulary `topics.primary` field, and renders a scannable markdown digest. With `--verify`, each link is HEAD-checked and annotated live / stale / dead — the key differentiator over a plain listing.
 
+## Config
+
+Use project-specific configs when supplied. Resolve `CONFIG` before running
+commands:
+
+```bash
+CONFIG="${SIGNAL_LOOM_CONFIG:-${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml}"
+test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1; }
+```
+
 ## Steps
 
 1. **Run the brief:**
    ```
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
-       --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml" \
+       --config "$CONFIG" \
        --since 7d
    ```
    For link verification (recommended for sharing or archiving):
    ```
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
-       --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml" \
+       --config "$CONFIG" \
        --since 7d \
        --verify
    ```
@@ -31,7 +41,7 @@ Reads the signal-loom index, groups entries by their controlled-vocabulary `topi
 3. **Offer to save** the digest to `content/briefs/<date>.md` if the user wants a persistent copy:
    ```
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
-       --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml" \
+       --config "$CONFIG" \
        --since 7d --verify > content/briefs/$(date +%F).md
    ```
 

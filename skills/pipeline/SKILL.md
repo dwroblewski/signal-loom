@@ -7,11 +7,21 @@ description: Run the full signal-loom ingestion loop interactively — scrape co
 
 Drives the scrape → enrich → index loop interactively (the headless equivalent is `python -m core.pipeline`, run on a schedule). Use this for on-demand runs and retries.
 
+## Config
+
+Use project-specific configs when supplied. Resolve `CONFIG` before running
+commands:
+
+```bash
+CONFIG="${SIGNAL_LOOM_CONFIG:-${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml}"
+test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1; }
+```
+
 ## Steps
 
 1. **Scrape + index (skip enrich for now)** so we can report what's new before spending on enrichment:
    ```
-   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.pipeline --once --no-enrich --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml"
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.pipeline --once --no-enrich --config "$CONFIG"
    ```
    Report: how many new files per source, any fetch warnings (e.g. a source needing `uv sync --extra browser`), total new.
 
@@ -21,7 +31,7 @@ Drives the scrape → enrich → index loop interactively (the headless equivale
 
 4. **Rebuild the index:**
    ```
-   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.index --config "${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml"
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.index --config "$CONFIG"
    ```
 
 5. **Report** final counts and surface the re-run queue (`failed-enrichments.jsonl`) if any enrichment failed.

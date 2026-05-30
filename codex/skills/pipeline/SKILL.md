@@ -10,19 +10,22 @@ Run the scrape -> optional Codex-native enrich -> index loop from Codex.
 ## Steps
 
 1. Resolve `ROOT` as described in `$enrich`.
+2. Resolve `CONFIG` as described in `$enrich`. Use a user-supplied config path
+   or `SIGNAL_LOOM_CONFIG` when present; otherwise default to
+   `$ROOT/config/signal-loom.yaml`.
 
-2. Scrape and index without paid API enrichment:
+3. Scrape and index without paid API enrichment:
    ```bash
-   ROOT="$ROOT" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.pipeline \
+   ROOT="$ROOT" CONFIG="$CONFIG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.pipeline \
        --once \
        --no-enrich \
-       --config "$ROOT/config/signal-loom.yaml"'
+       --config "$CONFIG"'
    ```
 
-3. If unenriched files remain, ask whether to enrich now. Use `$enrich` for
+4. If unenriched files remain, ask whether to enrich now. Use `$enrich` for
    that path so Codex, not Python API clients, does model work.
 
-4. After enrichment, rebuild the index and offer `$brief`.
+5. After enrichment, rebuild the index and offer `$brief`.
 
 ## Rules
 
