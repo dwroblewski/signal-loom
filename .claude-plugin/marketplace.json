@@ -5,8 +5,9 @@
   "plugins": [
     {
       "name": "signal-loom",
-      "source": { "source": "url", "url": "https://github.com/dwroblewski/signal-loom.git" },
-      "description": "Personal intelligence pipeline."
+      "source": "./",
+      "description": "Personal intelligence pipeline.",
+      "strict": false
     }
   ]
 }

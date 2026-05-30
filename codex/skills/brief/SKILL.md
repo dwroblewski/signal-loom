@@ -10,21 +10,20 @@ Render the grouped markdown digest from the signal-loom index.
 ## Steps
 
 1. Resolve `ROOT` as described in `$enrich`.
-2. Resolve `CONFIG` as described in `$enrich`. Use a user-supplied config path
-   or `SIGNAL_LOOM_CONFIG` when present; otherwise default to
-   `$ROOT/config/signal-loom.yaml`.
+2. Build `CONFIG_ARG` as described in `$enrich`. Do not compute a config path;
+   the core resolver walks up from cwd.
 
 3. Run the brief:
    ```bash
-   ROOT="$ROOT" CONFIG="$CONFIG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.brief \
-       --config "$CONFIG" \
+   ROOT="$ROOT" CONFIG_ARG="$CONFIG_ARG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.brief \
+       $CONFIG_ARG \
        --since 7d'
    ```
 
 4. For shareable or archived briefs, offer link verification:
    ```bash
-   ROOT="$ROOT" CONFIG="$CONFIG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.brief \
-       --config "$CONFIG" \
+   ROOT="$ROOT" CONFIG_ARG="$CONFIG_ARG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.brief \
+       $CONFIG_ARG \
        --since 7d \
        --verify'
    ```

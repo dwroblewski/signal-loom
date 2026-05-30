@@ -183,20 +183,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    from core.config import (
+        ConfigNotFoundError,
+        load_settings,
+        resolve_config_path,
+    )
+
     try:
-        from core.config import ensure_configs, load_settings, resolve_config_path
-
         config_path = resolve_config_path(args.config)
-        ensure_configs(config_path.parent)
+    except ConfigNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
-        if not config_path.exists():
-            print(
-                f"config not found at {config_path}; "
-                f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
-                file=sys.stderr,
-            )
-            return 1
-
+    try:
         settings = load_settings(config_path)
         result = build_index(settings.content_dir, settings.index_path)
         n = len(result["entries"])

@@ -360,28 +360,24 @@ def main(argv: list[str] | None = None) -> int:
     # Load vocab and aliases via config — fail hard on config errors (#4).
     from core.config import (
         ConfigError,
-        ensure_configs,
+        ConfigNotFoundError,
         load_aliases,
         load_settings,
         load_vocabulary,
         resolve_config_path,
     )
 
-    config_path = resolve_config_path(args.config)
-    ensure_configs(config_path.parent)
+    try:
+        config_path = resolve_config_path(args.config)
+    except ConfigNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
     failed_queue = (
         Path(args.failed_queue)
         if args.failed_queue is not None
         else default_failed_queue_path(config_path)
     )
-
-    if not config_path.exists():
-        print(
-            f"config not found at {config_path}; "
-            f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
-            file=sys.stderr,
-        )
-        return 1
 
     try:
         settings = load_settings(config_path)

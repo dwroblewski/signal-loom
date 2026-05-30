@@ -1,6 +1,14 @@
 {
   "name": "signal-loom",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Personal intelligence pipeline: sources → scrape → enrich → brief.",
-  "author": { "name": "Daniel Wroblewski" }
+  "author": { "name": "Daniel Wroblewski" },
+  "userConfig": {
+    "config_path": {
+      "type": "file",
+      "title": "Signal Loom config path",
+      "description": "Absolute path to a signal-loom.yaml. Optional — leave empty to use cwd walk-up (signal-loom.yaml in your project root, or a parent).",
+      "required": false
+    }
+  }
 }

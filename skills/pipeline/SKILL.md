@@ -9,21 +9,34 @@ Drives the scrape → enrich → index loop interactively (the headless equivale
 
 ## Config
 
-Use project-specific configs when supplied. Resolve `CONFIG` before running
-commands:
+Don't compute a config path manually — the core resolver discovers it. Order:
+
+1. `--config <path>` if the user supplied one
+2. `$CLAUDE_PLUGIN_OPTION_CONFIG_PATH` (set by Claude Code `userConfig`)
+3. `$SIGNAL_LOOM_CONFIG` (legacy; deprecated)
+4. Walk up from `$CLAUDE_PROJECT_DIR` (or cwd) looking for `signal-loom.yaml`,
+   `.signal-loom.yaml`, `.signal-loom/config.yaml`, or `config/signal-loom.yaml`
+
+If the resolver finds nothing it errors with a "run init" hint — do NOT try to
+write a default config from this skill. Tell the user to run the `init` skill
+or `python -m core.init --to .` and stop.
+
+Optional CLI override when the user explicitly names a config:
 
 ```bash
-CONFIG="${SIGNAL_LOOM_CONFIG:-${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml}"
-test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1; }
+CONFIG_ARG=""
+[ -n "${CONFIG:-}" ] && CONFIG_ARG="--config $CONFIG"
 ```
 
 ## Steps
 
 1. **Scrape + index (skip enrich for now)** so we can report what's new before spending on enrichment:
    ```
-   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.pipeline --once --no-enrich --config "$CONFIG"
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.pipeline --once --no-enrich $CONFIG_ARG
    ```
    Report: how many new files per source, any fetch warnings (e.g. a source needing `uv sync --extra browser`), total new.
+
+   If the command errors with "No signal-loom config found", do NOT auto-create one. Tell the user to run `/signal-loom init` (or `python -m core.init --to .`) and stop.
 
 2. **If there are unenriched files, ask the user** whether to enrich now (enrichment costs API tokens — see the cost table in the README). Offer: enrich now / skip / show the files first.
 
@@ -31,7 +44,7 @@ test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1;
 
 4. **Rebuild the index:**
    ```
-   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.index --config "$CONFIG"
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.index $CONFIG_ARG
    ```
 
 5. **Report** final counts and surface the re-run queue (`failed-enrichments.jsonl`) if any enrichment failed.

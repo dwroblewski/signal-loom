@@ -92,11 +92,15 @@ def test_resolve_config_path_explicit(tmp_path):
 
 
 def test_resolve_config_path_env_var(tmp_path, monkeypatch):
-    """$SIGNAL_LOOM_CONFIG env var is honoured."""
+    """$SIGNAL_LOOM_CONFIG env var is honoured (legacy / deprecated path)."""
     p = tmp_path / "env.yaml"
     p.touch()
     monkeypatch.setenv("SIGNAL_LOOM_CONFIG", str(p))
-    result = cfg.resolve_config_path(None)
+    # The resolver emits a DeprecationWarning for $SIGNAL_LOOM_CONFIG; that's
+    # intentional and tested separately in test_config_resolver.py. Suppress
+    # here so this back-compat test stays a back-compat test.
+    with pytest.warns(DeprecationWarning):
+        result = cfg.resolve_config_path(None)
     assert result == p
 
 
@@ -113,14 +117,26 @@ def test_resolve_config_path_cwd(tmp_path, monkeypatch):
     assert result == p
 
 
-def test_resolve_config_path_package_fallback(tmp_path, monkeypatch):
-    """Falls back to PACKAGE_CONFIG_DIR when nothing else exists."""
-    monkeypatch.chdir(tmp_path)
+def test_resolve_config_path_missing_raises(tmp_path, monkeypatch):
+    """Missing config raises ConfigNotFoundError instead of silently falling back to plugin dir.
+
+    Supersedes the old test_resolve_config_path_package_fallback behavior — we
+    deliberately removed silent fallback to PACKAGE_CONFIG_DIR because it
+    encouraged a single global config and meant plugin updates clobbered user state.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    project = home / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
     monkeypatch.delenv("SIGNAL_LOOM_CONFIG", raising=False)
-    # The package dir has the example file but not the actual yaml
-    result = cfg.resolve_config_path(None)
-    assert result.name == "signal-loom.yaml"
-    assert "config" in str(result)
+    monkeypatch.delenv("CLAUDE_PLUGIN_OPTION_CONFIG_PATH", raising=False)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+
+    with pytest.raises(cfg.ConfigNotFoundError) as exc:
+        cfg.resolve_config_path(None)
+    assert "init" in str(exc.value).lower()
 
 
 def test_ensure_configs_creates_from_examples(tmp_path):

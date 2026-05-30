@@ -250,7 +250,11 @@ def _parse_since(value: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     """CLI: python -m core.brief [options]"""
-    from core.config import resolve_config_path, ensure_configs, load_settings
+    from core.config import (
+        ConfigNotFoundError,
+        load_settings,
+        resolve_config_path,
+    )
 
     parser = argparse.ArgumentParser(
         prog="core.brief",
@@ -293,15 +297,15 @@ def main(argv: list[str] | None = None) -> int:
     # Resolve the index path: --index flag > config-derived > fallback "index.json"
     index_path_str = args.index
     if index_path_str is None:
-        config_path = resolve_config_path(args.config)
-        ensure_configs(config_path.parent)
-        if config_path.exists():
-            try:
-                settings = load_settings(config_path)
-                index_path_str = settings.index_path
-            except Exception:
-                index_path_str = "index.json"
-        else:
+        try:
+            config_path = resolve_config_path(args.config)
+            settings = load_settings(config_path)
+            index_path_str = settings.index_path
+        except ConfigNotFoundError:
+            # `brief` is a query, not a generator — fall back to "index.json" in
+            # cwd so users can ad-hoc inspect indexes without a project config.
+            index_path_str = "index.json"
+        except Exception:
             index_path_str = "index.json"
 
     # Friendly error if the index file doesn't exist

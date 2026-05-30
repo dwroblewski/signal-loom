@@ -47,6 +47,36 @@ class ConfigError(Exception):
     """Raised when a config file contains invalid or unsupported values."""
 
 
+class ConfigNotFoundError(ConfigError):
+    """Raised when no signal-loom config can be discovered.
+
+    Carries the list of paths searched and a human-readable message that
+    tells the caller exactly how to fix the situation (run init, pass
+    ``--config``, or place ``signal-loom.yaml`` in the project).
+    """
+
+    def __init__(self, searched: list[Path], start: Path, *, reason: str | None = None):
+        self.searched = list(searched)
+        self.start = start
+        self.reason = reason
+
+        searched_str = "\n  ".join(str(p) for p in searched) if searched else "(none)"
+        hint = (
+            "To fix:\n"
+            "  • Run `python -m core.init --to <dir>` to scaffold one, or\n"
+            "  • Pass `--config <path>` to point at an existing file, or\n"
+            "  • Place a `signal-loom.yaml` in this project (or a parent directory)."
+        )
+        message = (
+            (f"{reason}\n\n" if reason else "")
+            + "No signal-loom config found.\n"
+            + f"Walked up from: {start}\n"
+            + f"Searched:\n  {searched_str}\n\n"
+            + hint
+        )
+        super().__init__(message)
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -87,37 +117,137 @@ class Settings:
 # ---------------------------------------------------------------------------
 
 
-def resolve_config_path(explicit: str | None) -> Path:
+# Filenames searched by walk-up, in precedence order. The first one found at a
+# given directory wins before moving to the parent.
+_WALKUP_FILENAMES: tuple[str, ...] = (
+    "signal-loom.yaml",
+    ".signal-loom.yaml",
+    ".signal-loom/config.yaml",
+    "config/signal-loom.yaml",  # legacy layout (pre-v0.2)
+)
+
+
+def _walkup_start(cwd: Path | None, project_dir: Path | None) -> Path:
+    """Choose where to start the walk-up.
+
+    Precedence: explicit project_dir → $CLAUDE_PROJECT_DIR → explicit cwd → os.getcwd().
+    The Claude Code env var is the right answer when present because the host
+    has already resolved 'which project the agent is in'.
+    """
+    if project_dir is not None:
+        return Path(project_dir).resolve()
+    env_project = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env_project:
+        return Path(env_project).resolve()
+    if cwd is not None:
+        return Path(cwd).resolve()
+    return Path.cwd().resolve()
+
+
+def _walkup_boundary() -> Path:
+    """Return the directory the walk-up must NOT escape (defaults to $HOME)."""
+    home = os.environ.get("HOME")
+    return Path(home).resolve() if home else Path("/")
+
+
+def _walkup_search(start: Path) -> tuple[Path | None, list[Path]]:
+    """Walk from *start* upward looking for any of _WALKUP_FILENAMES.
+
+    Returns (found_path, all_candidate_paths_checked).
+    Stops at the $HOME boundary or filesystem root, inclusive.
+    """
+    boundary = _walkup_boundary()
+    searched: list[Path] = []
+    current = start
+    while True:
+        for name in _WALKUP_FILENAMES:
+            candidate = current / name
+            searched.append(candidate)
+            if candidate.is_file():
+                return candidate, searched
+        # Stop AFTER checking the boundary directory itself.
+        if current == boundary or current.parent == current:
+            return None, searched
+        # Don't ascend above $HOME even if cwd started inside $HOME.
+        try:
+            if boundary in current.parents and current.parent not in (boundary, *boundary.parents):
+                pass  # parent is still below or at boundary — keep walking
+        except Exception:
+            pass
+        if current == boundary:
+            return None, searched
+        current = current.parent
+
+
+def resolve_config_path(
+    explicit: str | Path | None = None,
+    *,
+    cwd: Path | None = None,
+    project_dir: Path | None = None,
+) -> Path:
     """Resolve the path to signal-loom.yaml.
 
-    Resolution order (first existing wins):
-    1. *explicit* — if provided, return it as-is (user override).
-    2. ``$SIGNAL_LOOM_CONFIG`` env var (full path to signal-loom.yaml).
-    3. ``Path.cwd() / "config/signal-loom.yaml"`` — repo / headless install.
-    4. ``PACKAGE_CONFIG_DIR / "signal-loom.yaml"`` — plugin install beside code.
+    Precedence (first existing file wins; otherwise raises ConfigNotFoundError):
 
-    If none of 2-4 exist, returns the PACKAGE_CONFIG_DIR path so that
-    ``ensure_configs`` can create it from the example there.
+      1. *explicit* — the CLI ``--config`` flag. Must exist or raises.
+      2. ``$CLAUDE_PLUGIN_OPTION_CONFIG_PATH`` — Claude Code ``userConfig`` output.
+         Set once at plugin-enable time; missing-file falls through.
+      3. ``$SIGNAL_LOOM_CONFIG`` — legacy env var. **Deprecated**; emits a
+         DeprecationWarning. Missing-file falls through.
+      4. Walk up from ``project_dir`` (or ``$CLAUDE_PROJECT_DIR``, or ``cwd``, or
+         ``os.getcwd()``) checking, in each directory:
+           - ``signal-loom.yaml``
+           - ``.signal-loom.yaml``
+           - ``.signal-loom/config.yaml``
+           - ``config/signal-loom.yaml``  (legacy layout)
+         Stops at ``$HOME`` or filesystem root.
+
+    Raises:
+        ConfigNotFoundError: nothing was discovered.
     """
+    # (1) explicit
     if explicit is not None:
-        return Path(explicit)
+        p = Path(explicit)
+        if p.is_file():
+            return p
+        raise ConfigNotFoundError(
+            [p],
+            start=p.parent,
+            reason=f"--config path does not exist: {p}",
+        )
 
-    env_path = os.environ.get("SIGNAL_LOOM_CONFIG")
-    if env_path:
-        p = Path(env_path)
-        if p.exists():
+    # (2) Claude Code userConfig
+    user_cfg = os.environ.get("CLAUDE_PLUGIN_OPTION_CONFIG_PATH")
+    if user_cfg:
+        p = Path(user_cfg)
+        if p.is_file():
+            return p
+        # Fall through silently — the user may have an unset userConfig with
+        # a default placeholder; we should still discover a local config.
+
+    # (3) Legacy $SIGNAL_LOOM_CONFIG (deprecated)
+    legacy = os.environ.get("SIGNAL_LOOM_CONFIG")
+    if legacy:
+        p = Path(legacy)
+        if p.is_file():
+            import warnings
+
+            warnings.warn(
+                "$SIGNAL_LOOM_CONFIG is deprecated; use Claude Code userConfig "
+                "(CLAUDE_PLUGIN_OPTION_CONFIG_PATH) or place a signal-loom.yaml "
+                "in your project root for walk-up discovery.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return p
 
-    cwd_path = Path.cwd() / "config" / "signal-loom.yaml"
-    if cwd_path.exists():
-        return cwd_path
+    # (4) Walk-up discovery
+    start = _walkup_start(cwd, project_dir)
+    found, searched = _walkup_search(start)
+    if found is not None:
+        return found
 
-    pkg_path = PACKAGE_CONFIG_DIR / "signal-loom.yaml"
-    if pkg_path.exists():
-        return pkg_path
-
-    # None found — return the package dir path so ensure_configs can bootstrap there.
-    return PACKAGE_CONFIG_DIR / "signal-loom.yaml"
+    raise ConfigNotFoundError(searched, start=start)
 
 
 def ensure_configs(config_dir: Path) -> list[str]:
@@ -364,15 +494,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    config_path = resolve_config_path(args.config)
-    ensure_configs(config_path.parent)
-
-    if not config_path.exists():
-        print(
-            f"config not found at {config_path}; "
-            f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
-            file=sys.stderr,
-        )
+    try:
+        config_path = resolve_config_path(args.config)
+    except ConfigNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
     try:

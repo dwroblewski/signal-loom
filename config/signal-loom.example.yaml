@@ -1,8 +1,8 @@
-# signal-loom global settings
-# Copy to signal-loom.yaml and adjust for your environment.
-# On first plugin session, these files are auto-created from *.example.yaml.
-# Set SIGNAL_LOOM_CONFIG=/stable/path/signal-loom.yaml for durable config
-# (a plugin update may overwrite the plugin directory).
+# signal-loom global settings.
+# Don't edit this file. Instead, scaffold a real one in your project:
+#   python -m core.init --to .
+# The runtime resolver walks up from cwd to find signal-loom.yaml.
+# See README → "Config discovery" for the full precedence chain.
 
 enrichment_model: claude-sonnet-4-6
 # Paths are resolved relative to this config file's directory.

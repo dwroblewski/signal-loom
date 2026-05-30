@@ -50,33 +50,30 @@ enrichment. Report, but do not expose, any inherited-shell key presence.
 
 ## Config Resolution
 
-Do not assume the active config lives under the plugin root. Signal Loom is
-designed to support project-specific configs through `SIGNAL_LOOM_CONFIG` or an
-explicit user-supplied config path.
+Do not compute a config path manually. The core resolver in `core.config`
+handles discovery via the documented precedence (`--config` flag →
+`CLAUDE_PLUGIN_OPTION_CONFIG_PATH` → `SIGNAL_LOOM_CONFIG` (deprecated) → walk-up
+from `$CLAUDE_PROJECT_DIR` or cwd for `signal-loom.yaml` / `.signal-loom.yaml` /
+`.signal-loom/config.yaml` / `config/signal-loom.yaml`).
 
-Resolve `CONFIG` before running commands:
-
-1. If the user supplied a config path, use that exact path.
-2. Else if `SIGNAL_LOOM_CONFIG` is set, use it.
-3. Otherwise use `$ROOT/config/signal-loom.yaml`.
-
-One portable shell snippet:
+Only forward `--config` when the user explicitly passed one:
 
 ```bash
-CONFIG="${SIGNAL_LOOM_CONFIG:-}"
-if [ -z "$CONFIG" ]; then
-    CONFIG="$ROOT/config/signal-loom.yaml"
-fi
-test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1; }
+CONFIG_ARG=""
+[ -n "${CONFIG:-}" ] && CONFIG_ARG="--config $CONFIG"
 ```
+
+If the core command errors with "No signal-loom config found", do NOT try to
+write one from this skill. Tell the user to run `python -m core.init --to .`
+from their project directory and stop.
 
 ## Steps
 
 1. Generate bounded work packets:
    ```bash
    _packets=$(mktemp)
-   ROOT="$ROOT" CONFIG="$CONFIG" _packets="$_packets" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.enrichment_packets emit \
-       --config "$CONFIG" \
+   ROOT="$ROOT" CONFIG_ARG="$CONFIG_ARG" _packets="$_packets" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.enrichment_packets emit \
+       $CONFIG_ARG \
        --max-files 5 \
        --out "$_packets"'
    ```
@@ -91,17 +88,17 @@ test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1;
    cat > "$_raw" <<'YAML'
 <raw Codex yaml response>
 YAML
-   ROOT="$ROOT" CONFIG="$CONFIG" _raw="$_raw" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.enrichment_writeback apply \
+   ROOT="$ROOT" CONFIG_ARG="$CONFIG_ARG" _raw="$_raw" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.enrichment_writeback apply \
        "<packet path>" \
-       --config "$CONFIG" \
+       $CONFIG_ARG \
        --raw-file "$_raw"'
    rm -f "$_raw"
    ```
 
 4. Rebuild the index:
    ```bash
-   ROOT="$ROOT" CONFIG="$CONFIG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.index \
-       --config "$CONFIG"'
+   ROOT="$ROOT" CONFIG_ARG="$CONFIG_ARG" env -u OPENAI_API_KEY -u CODEX_API_KEY -u ANTHROPIC_API_KEY /bin/sh -c 'uv run --project "$ROOT" python -m core.index \
+       $CONFIG_ARG'
    ```
 
 5. Report enriched, skipped, failed, and any `failed-enrichments.jsonl` entries.

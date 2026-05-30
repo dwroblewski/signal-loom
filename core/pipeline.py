@@ -44,7 +44,7 @@ import frontmatter
 
 from core.config import (
     ConfigError,
-    ensure_configs,
+    ConfigNotFoundError,
     load_aliases,
     load_settings,
     load_sources,
@@ -229,15 +229,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     # ------------------------------------------------------------------ #
     # 1. Load configuration                                                #
     # ------------------------------------------------------------------ #
-    config_path = resolve_config_path(args.config)
-    ensure_configs(config_path.parent)
-
-    if not config_path.exists():
-        print(
-            f"config not found at {config_path}; "
-            f"copy config/signal-loom.example.yaml → config/signal-loom.yaml",
-            file=sys.stderr,
-        )
+    try:
+        config_path = resolve_config_path(args.config)
+    except ConfigNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
     try:

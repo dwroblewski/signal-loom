@@ -20,7 +20,7 @@ import frontmatter
 from core import prompts
 from core.config import (
     ConfigError,
-    ensure_configs,
+    ConfigNotFoundError,
     load_settings,
     load_vocabulary,
     resolve_config_path,
@@ -70,13 +70,10 @@ def build_packets(
     max_chars: int = 50000,
 ) -> list[dict]:
     """Load config and return packets for unenriched files."""
+    # ConfigNotFoundError carries its own actionable message; let it propagate
+    # so the CLI wrapper prints it. Programmatic callers can catch the base
+    # ConfigError to handle both flavors uniformly.
     config_path = resolve_config_path(config)
-    ensure_configs(config_path.parent)
-    if not config_path.exists():
-        raise ConfigError(
-            f"config not found at {config_path}; copy config/signal-loom.example.yaml"
-        )
-
     settings = load_settings(config_path)
     vocabulary = load_vocabulary(settings.topics_path)
     if not vocabulary:
