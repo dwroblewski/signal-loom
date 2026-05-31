@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from core.config import PACKAGE_CONFIG_DIR
+from core.config import PACKAGE_CONFIG_DIR, find_existing_configs
 
 # Project root = parent of the `core/` package.
 _PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
@@ -69,19 +69,27 @@ def _resolve_template_dir(template: str) -> Path | None:
 def _source_path_for(template_dir: Path, target_name: str) -> Path | None:
     """Find the source file in *template_dir* for *target_name*.
 
-    Looks for both layouts:
-      - ``<target_name>``                       (new examples/<template>/ layout)
-      - ``<stem>.example.<ext>``                (legacy config/ layout)
+    Two template layouts are supported, and the canonical template ALWAYS wins:
+      - ``<stem>.example.<ext>``  — the legacy ``config/`` layout. This is the
+        committed source of truth. It is checked FIRST so that a stray, non-
+        example ``<target_name>`` left in the package config dir (e.g. an
+        auto-bootstrap leftover like ``config/signal-loom.yaml``) can NOT
+        shadow the real template. That shadowing was a real footgun: such a
+        leftover could carry a ``content_dir: ../content`` that escapes the
+        project when scaffolded to a root.
+      - ``<target_name>``         — the ``examples/<template>/`` layout, which
+        uses bare filenames and has no ``.example`` variant. Used as fallback.
+
     Returns the first existing match, or None.
     """
+    p = Path(target_name)
+    example = template_dir / f"{p.stem}.example{p.suffix}"
+    if example.is_file():
+        return example
+
     direct = template_dir / target_name
     if direct.is_file():
         return direct
-
-    p = Path(target_name)
-    legacy = template_dir / f"{p.stem}.example{p.suffix}"
-    if legacy.is_file():
-        return legacy
 
     return None
 
@@ -159,6 +167,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     target_dir = Path(args.to).resolve()
+
+    # Guard against scaffolding a duplicate over a project that is ALREADY
+    # configured — including configs in nested / non-standard locations the
+    # walk-up resolver won't auto-discover (e.g. config/<name>/signal-loom.yaml).
+    # The exact target file is handled by the normal overwrite-refusal below;
+    # here we only care about *other* existing configs under the target.
+    if not args.force:
+        target_self = target_dir / "signal-loom.yaml"
+        others = [
+            p for p in find_existing_configs(target_dir) if p.resolve() != target_self.resolve()
+        ]
+        if others:
+            listed = "\n  ".join(str(p) for p in others)
+            print(
+                f"signal-loom: found existing config(s) under {target_dir}:\n  {listed}\n\n"
+                "Refusing to scaffold a new config — this project looks already set up.\n"
+                "  • To USE an existing config:  run the pipeline with "
+                "`--config <one of the paths above>`\n"
+                "  • To create a new one anyway: re-run with --force",
+                file=sys.stderr,
+            )
+            return 1
+
     created, skipped = _write(template_dir, target_dir, force=args.force)
 
     if skipped:

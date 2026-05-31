@@ -57,3 +57,62 @@ def test_init_template_unknown_errors(tmp_path, capsys):
     assert rc != 0
     out = capsys.readouterr()
     assert "template" in (out.err + out.out).lower()
+
+
+def test_init_root_config_keeps_output_inside_project(tmp_path):
+    """Regression: a config scaffolded at the project ROOT must resolve its
+    output dirs INSIDE the project, never escaping via `../`.
+
+    Guards the path-skew bug where signal-loom.example.yaml hardcoded
+    `content_dir: ../content`, which pointed outside the project when init
+    wrote the config to a root directory.
+    """
+    from core import config as cfg
+
+    import os
+
+    assert init_mod.main(["--to", str(tmp_path)]) == 0
+    settings = cfg.load_settings(tmp_path / "signal-loom.yaml")
+
+    # os.path.realpath canonicalizes symlinks identically on both sides
+    # (pytest's tmp_path may live under a symlinked TMPDIR on macOS, which made
+    # naive Path.resolve() comparisons skew).
+    root = os.path.realpath(tmp_path)
+    content = os.path.realpath(settings.content_dir)
+    index = os.path.realpath(settings.index_path)
+
+    # Intent: output lands INSIDE the project, and the stored path never uses
+    # a `..` segment that would escape the project root when init writes to root.
+    assert ".." not in Path(settings.content_dir).parts
+    assert ".." not in Path(settings.index_path).parts
+    assert content == os.path.join(root, "content")
+    assert index == os.path.join(root, "index.json")
+
+
+def test_init_refuses_when_nested_config_exists(tmp_path, capsys):
+    """init must NOT scaffold a duplicate when a config already exists in a
+    nested/non-standard location the walk-up resolver can't find."""
+    nested = tmp_path / "config" / "recipe-trends"
+    nested.mkdir(parents=True)
+    (nested / "signal-loom.yaml").write_text("enrichment_model: x\n")
+
+    rc = init_mod.main(["--to", str(tmp_path)])
+
+    assert rc != 0
+    err = capsys.readouterr().err.lower()
+    assert "existing" in err
+    assert "--config" in err or "--force" in err
+    # Crucially, it did NOT scaffold over the configured project.
+    assert not (tmp_path / "signal-loom.yaml").exists()
+
+
+def test_init_force_bypasses_existing_nested_config(tmp_path):
+    """--force is the explicit escape hatch for the existing-config refusal."""
+    nested = tmp_path / "config" / "recipe-trends"
+    nested.mkdir(parents=True)
+    (nested / "signal-loom.yaml").write_text("enrichment_model: x\n")
+
+    rc = init_mod.main(["--to", str(tmp_path), "--force"])
+
+    assert rc == 0
+    assert (tmp_path / "signal-loom.yaml").exists()

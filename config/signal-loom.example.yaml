@@ -5,10 +5,22 @@
 # See README → "Config discovery" for the full precedence chain.
 
 enrichment_model: claude-sonnet-4-6
-# Paths are resolved relative to this config file's directory.
-# With this file at config/signal-loom.yaml, sibling files are just filenames:
-content_dir: ../content
-index_path: ../index.json
+
+# Output locations are intentionally LEFT UNSET so they default based on where
+# THIS config file lives (resolved relative to this file's directory):
+#   • config at your project root      ->  ./content   and  ./index.json
+#   • config inside a  config/  subdir ->  ../content  and  ../index.json
+#     (output is kept beside the repo, not buried inside config/)
+# Only set them explicitly to send output somewhere else, e.g.:
+#   content_dir: data/signals/content
+#   index_path:  data/signals/index.json
+#
+# NOTE: do NOT hardcode `content_dir: ../content` here. When `core.init` copies
+# this file to a project ROOT, `../content` escapes the project. Leaving it
+# unset lets the location-aware default in core.config.load_settings do the
+# right thing for both layouts.
+
+# These three are sibling files next to this config:
 sources_path: sources.yaml
 topics_path: topics.yaml
 aliases_path: entity-aliases.yaml

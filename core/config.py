@@ -55,10 +55,22 @@ class ConfigNotFoundError(ConfigError):
     ``--config``, or place ``signal-loom.yaml`` in the project).
     """
 
-    def __init__(self, searched: list[Path], start: Path, *, reason: str | None = None):
+    def __init__(
+        self,
+        searched: list[Path],
+        start: Path,
+        *,
+        reason: str | None = None,
+        discovered: list[Path] | None = None,
+    ):
         self.searched = list(searched)
         self.start = start
         self.reason = reason
+        # Configs found *under* the project by a recursive scan, that the
+        # walk-up did NOT auto-discover (e.g. a per-purpose config nested at
+        # config/<name>/signal-loom.yaml). Surfacing these prevents users from
+        # scaffolding a duplicate over an already-configured project.
+        self.discovered = list(discovered or [])
 
         searched_str = "\n  ".join(str(p) for p in searched) if searched else "(none)"
         hint = (
@@ -67,11 +79,22 @@ class ConfigNotFoundError(ConfigError):
             "  • Pass `--config <path>` to point at an existing file, or\n"
             "  • Place a `signal-loom.yaml` in this project (or a parent directory)."
         )
+        existing_block = ""
+        if self.discovered:
+            listed = "\n  ".join(str(p) for p in self.discovered)
+            existing_block = (
+                "Found existing signal-loom config(s) under this project that the\n"
+                "walk-up did NOT auto-discover (non-standard / nested location):\n  "
+                + listed
+                + "\n→ Re-run with `--config <one of the paths above>` to use it,\n"
+                + "  rather than scaffolding a new config.\n\n"
+            )
         message = (
             (f"{reason}\n\n" if reason else "")
             + "No signal-loom config found.\n"
             + f"Walked up from: {start}\n"
             + f"Searched:\n  {searched_str}\n\n"
+            + existing_block
             + hint
         )
         super().__init__(message)
@@ -148,6 +171,62 @@ def _walkup_boundary() -> Path:
     """Return the directory the walk-up must NOT escape (defaults to $HOME)."""
     home = os.environ.get("HOME")
     return Path(home).resolve() if home else Path("/")
+
+
+# Directories never worth scanning when hunting for stray configs.
+_SCAN_SKIP_DIRS: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".venv",
+        "venv",
+        "env",
+        "node_modules",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        "dist",
+        "build",
+        ".astro",
+        ".next",
+        ".cache",
+    }
+)
+
+
+def find_existing_configs(start: Path, *, limit: int = 25) -> list[Path]:
+    """Recursively find ``signal-loom.yaml`` files anywhere under *start*.
+
+    This catches configs the walk-up resolver intentionally does NOT find —
+    e.g. a per-purpose config nested at
+    ``config/signal-loom-recipe-trends/signal-loom.yaml``. It exists so the
+    "no config found" path can suggest ``--config <path>`` instead of letting
+    a user (or agent) scaffold a duplicate over an already-configured project.
+
+    Bounded by *limit* and skips heavy/irrelevant directories
+    (``.git``, ``.venv``, ``node_modules``, …). Returns sorted unique paths.
+    """
+    try:
+        if not start.is_dir():
+            return []
+    except OSError:
+        return []
+
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for path in start.rglob("signal-loom.yaml"):
+        if any(part in _SCAN_SKIP_DIRS for part in path.parts):
+            continue
+        try:
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        found.append(path)
+        if len(found) >= limit:
+            break
+    return sorted(found)
 
 
 def _walkup_search(start: Path) -> tuple[Path | None, list[Path]]:
@@ -247,7 +326,11 @@ def resolve_config_path(
     if found is not None:
         return found
 
-    raise ConfigNotFoundError(searched, start=start)
+    # Nothing on the walk-up path. Before giving up, scan the project for
+    # configs in non-standard / nested locations so the error can point at
+    # them (use --config) instead of inviting a duplicate scaffold.
+    discovered = find_existing_configs(start)
+    raise ConfigNotFoundError(searched, start=start, discovered=discovered)
 
 
 def ensure_configs(config_dir: Path) -> list[str]:

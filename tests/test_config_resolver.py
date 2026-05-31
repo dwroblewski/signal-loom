@@ -214,3 +214,53 @@ def test_legacy_positional_explicit_argument(tmp_path):
     """Existing callers do resolve_config_path(args.config) — must still work."""
     p = _touch(tmp_path / "explicit.yaml")
     assert cfg.resolve_config_path(str(p)) == p
+
+
+# ---------------------------------------------------------------------------
+# (7) Existing-but-non-discoverable configs surfaced on failure
+# ---------------------------------------------------------------------------
+
+
+def test_find_existing_configs_finds_nested_and_skips_heavy_dirs(tmp_path):
+    nested = tmp_path / "config" / "recipe-trends"
+    nested.mkdir(parents=True)
+    wanted = nested / "signal-loom.yaml"
+    wanted.write_text("enrichment_model: x\n")
+    # A config buried in a skip-listed dir must be ignored.
+    venv = tmp_path / ".venv" / "share"
+    venv.mkdir(parents=True)
+    (venv / "signal-loom.yaml").write_text("enrichment_model: ignore-me\n")
+
+    found = cfg.find_existing_configs(tmp_path)
+
+    assert wanted in found
+    assert all(".venv" not in p.parts for p in found)
+
+
+def test_config_not_found_surfaces_nested_configs(tmp_path, monkeypatch):
+    """The walk-up misses nested configs; the error must still point at them."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    nested = project / "config" / "recipe-trends"
+    nested.mkdir(parents=True)
+    cfg_file = nested / "signal-loom.yaml"
+    cfg_file.write_text("enrichment_model: x\n")
+
+    with pytest.raises(cfg.ConfigNotFoundError) as exc_info:
+        cfg.resolve_config_path(None, cwd=project)
+
+    assert cfg_file in exc_info.value.discovered
+    msg = str(exc_info.value)
+    assert "existing" in msg.lower()
+    assert "--config" in msg
+
+
+def test_config_not_found_no_nested_configs_has_empty_discovered(tmp_path, monkeypatch):
+    """When there's genuinely nothing, discovered is empty and no false hint shows."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    start = tmp_path / "project"
+    start.mkdir()
+    with pytest.raises(cfg.ConfigNotFoundError) as exc_info:
+        cfg.resolve_config_path(None, cwd=start)
+    assert exc_info.value.discovered == []
+    assert "Found existing signal-loom config" not in str(exc_info.value)

@@ -36,7 +36,7 @@ CONFIG_ARG=""
    ```
    Report: how many new files per source, any fetch warnings (e.g. a source needing `uv sync --extra browser`), total new.
 
-   If the command errors with "No signal-loom config found", do NOT auto-create one. Tell the user to run `/signal-loom init` (or `python -m core.init --to .`) and stop.
+   If the command errors with "No signal-loom config found", do NOT auto-create one. The error now scans the project and lists any existing configs it found in nested/non-standard locations (e.g. `config/<name>/signal-loom.yaml`) — **if it lists any, prefer re-running with `--config <that path>`** rather than scaffolding. Only if it finds none, tell the user to run `/signal-loom init` (or `python -m core.init --to .`) and stop.
 
 2. **If there are unenriched files, ask the user** whether to enrich now (enrichment costs API tokens — see the cost table in the README). Offer: enrich now / skip / show the files first.
 
