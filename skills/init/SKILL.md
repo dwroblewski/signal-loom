@@ -94,3 +94,19 @@ in their project.
   that.
 - This skill scaffolds files. It does NOT run the pipeline. After init, the
   user invokes `/pipeline` (or the `pipeline` skill) themselves.
+- **Never require `$SIGNAL_LOOM_CONFIG` (or any env var) to run.** It is a
+  deprecated legacy fallback in `core.config.resolve_config_path`, not a setup
+  step. The supported path: `init` scaffolds `signal-loom.yaml` in the project,
+  then the walk-up resolver finds it with no env var set. If you catch yourself
+  telling the user to `export SIGNAL_LOOM_CONFIG=…`, stop — fix the config
+  location instead (scaffold here, or use `--config <path>`).
+- **Must work on a clean clone with zero environment setup.** Verify the
+  fresh-install path before claiming done, with the env var UNSET:
+  `env -u SIGNAL_LOOM_CONFIG uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.config --print sources_path`
+  should print `<project>/sources.yaml` and exit 0. If it only works with the
+  env var set, that is the antipattern recurring — fix the root cause, not the env.
+- **Don't ship one-off env-var workarounds; align skills with the resolver.**
+  `pipeline` is the reference (it never computes a config path, it defers to the
+  resolver). `brief` and `enrich` (SKILL.md:16) and `README.md` still recommend
+  the env var — the old antipattern. When touching first-run behavior, fix those
+  at the source rather than patching around them.
