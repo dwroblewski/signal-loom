@@ -140,7 +140,7 @@ non-example `config/*.yaml` files. Setup details live in
 Then, in a session:
 
 1. **Set your key** — `export ANTHROPIC_API_KEY=sk-ant-...` (Claude/headless API enrichment runs against the Anthropic API; see [Cost](#cost)).
-2. **Configure your sources** — on first session the plugin creates `config/*.yaml` from the examples automatically. Edit them (your editor / ask Claude to open `${CLAUDE_PLUGIN_ROOT}/config/sources.yaml`). If you want durable config that survives plugin updates, set `SIGNAL_LOOM_CONFIG=/stable/path/signal-loom.yaml`.
+2. **Configure your sources** — run `/init` to scaffold `signal-loom.yaml` (plus `sources.yaml`, `topics.yaml`, `entity-aliases.yaml`) in your project; the walk-up resolver finds it automatically, with no env var to set. Edit `sources.yaml` and `topics.yaml` with your own sources and vocabulary. (Config that lives in your project also survives plugin updates.)
 3. **Run it** — `/pipeline` scrapes new items, asks before enriching (cost-aware), and rebuilds the index. Then `/brief --verify` for a topic-grouped digest with live-link checks.
 
 `uv` must be on your PATH (the bootstrap hook installs deps on first session). Install it: <https://docs.astral.sh/uv/>.
@@ -158,7 +158,7 @@ uv run python -m core.pipeline --once --max-enrich 10  # enrich at most 10 files
 
 Enrichment bills per article — see [Cost](#cost). Run `--no-enrich` first to check your sources work, then add enrichment once you're satisfied. Set `ANTHROPIC_API_KEY` before enriching; the pipeline exits with a clear error if it's unset.
 
-From a cloned repo, config files are auto-created from `*.example.yaml` on first run. From an arbitrary directory, set `SIGNAL_LOOM_CONFIG=/path/to/signal-loom.yaml`.
+From a cloned repo, config files are auto-created from `*.example.yaml` on first run. From an arbitrary directory, scaffold a project config with `python -m core.init --to .` (or `/init` in Claude Code) and the walk-up resolver finds it automatically — no env var required.
 
 Install for headless use with `uv sync` (or `pip install -e .`).
 

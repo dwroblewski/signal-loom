@@ -9,12 +9,24 @@ Reads the signal-loom index, groups entries by their controlled-vocabulary `topi
 
 ## Config
 
-Use project-specific configs when supplied. Resolve `CONFIG` before running
-commands:
+Don't compute a config path manually — the core resolver discovers it. Order:
+
+1. `--config <path>` if the user supplied one
+2. `$CLAUDE_PLUGIN_OPTION_CONFIG_PATH` (set by Claude Code `userConfig`)
+3. `$SIGNAL_LOOM_CONFIG` (legacy; deprecated)
+4. Walk up from `$CLAUDE_PROJECT_DIR` (or cwd) looking for `signal-loom.yaml`,
+   `.signal-loom.yaml`, `.signal-loom/config.yaml`, or `config/signal-loom.yaml`
+
+`brief` is a read-only query: if the resolver finds nothing, `core.brief` falls
+back to `index.json` in the cwd so ad-hoc inspection still works. Don't write a
+default config from this skill — if there's no project config, suggest the user
+run the `init` skill (or `python -m core.init --to .`).
+
+Optional CLI override when the user explicitly names a config:
 
 ```bash
-CONFIG="${SIGNAL_LOOM_CONFIG:-${CLAUDE_PLUGIN_ROOT}/config/signal-loom.yaml}"
-test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1; }
+CONFIG_ARG=""
+[ -n "${CONFIG:-}" ] && CONFIG_ARG="--config $CONFIG"
 ```
 
 ## Steps
@@ -22,13 +34,13 @@ test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1;
 1. **Run the brief:**
    ```
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
-       --config "$CONFIG" \
+       $CONFIG_ARG \
        --since 7d
    ```
    For link verification (recommended for sharing or archiving):
    ```
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
-       --config "$CONFIG" \
+       $CONFIG_ARG \
        --since 7d \
        --verify
    ```
@@ -41,7 +53,7 @@ test -f "$CONFIG" || { echo "signal-loom config not found: $CONFIG" >&2; exit 1;
 3. **Offer to save** the digest to `content/briefs/<date>.md` if the user wants a persistent copy:
    ```
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
-       --config "$CONFIG" \
+       $CONFIG_ARG \
        --since 7d --verify > content/briefs/$(date +%F).md
    ```
 
