@@ -71,6 +71,32 @@ def test_keyword_filter_drops_offtopic(tmp_path, rss_fixture):
     assert result == [], "All items should be filtered out by keyword_filter"
 
 
+def test_default_fetch_feed_retries_429_with_capped_delay(httpx_mock, monkeypatch):
+    """A large Retry-After must not stall the scraper indefinitely."""
+    url = "https://example.com/feed.xml"
+    sleeps = []
+
+    monkeypatch.setattr(scrape.time, "sleep", lambda seconds: sleeps.append(seconds))
+    httpx_mock.add_response(url=url, status_code=429, headers={"Retry-After": "3600"})
+    httpx_mock.add_response(
+        url=url,
+        status_code=200,
+        text=(
+            "<?xml version='1.0'?>"
+            "<rss version='2.0'><channel><title>X</title>"
+            "<item><title>One</title><link>https://example.com/one</link>"
+            "<pubDate>Fri, 19 Jun 2026 12:00:00 GMT</pubDate>"
+            "<description>Body</description></item></channel></rss>"
+        ),
+    )
+
+    parsed = scrape._default_fetch_feed(url)
+
+    assert sleeps == [300.0]
+    assert len(parsed.entries) == 1
+    assert parsed.entries[0].title == "One"
+
+
 # ---------------------------------------------------------------------------
 # Fix 1: Atom/ISO date parsing
 # ---------------------------------------------------------------------------

@@ -118,6 +118,8 @@ class SourceConfig:
     scrape_limit: int = 10
     scrape_full_content: bool = False
     fetch_method: str = "auto"
+    throttle_group: str | None = None
+    throttle_seconds: float = 0.0
     keyword_filter: dict | None = None
     listing_link_pattern: str | None = None
     enabled: bool = True
@@ -429,6 +431,8 @@ def load_sources(path: str) -> list[SourceConfig]:
             scrape_limit=int(data.get("scrape_limit", 10)),
             scrape_full_content=bool(data.get("scrape_full_content", False)),
             fetch_method=str(data.get("fetch_method", "auto")),
+            throttle_group=data.get("throttle_group") or None,
+            throttle_seconds=float(data.get("throttle_seconds", 0) or 0),
             keyword_filter=kf,
             listing_link_pattern=data.get("listing_link_pattern") or None,
             enabled=bool(data.get("enabled", True)),

@@ -19,6 +19,7 @@ import hashlib
 import html as _html_module
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -30,6 +31,9 @@ import frontmatter
 from core.config import SourceConfig
 
 logger = logging.getLogger(__name__)
+
+_RATE_LIMIT_RETRY_FALLBACK_SECONDS = 65.0
+_RATE_LIMIT_RETRY_MAX_SECONDS = 300.0
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,6 +70,24 @@ def _sanitize_filename(title: str, max_len: int = 100) -> str:
 def _url_hash(url: str, length: int = 6) -> str:
     """Return a short hex hash of the URL for filename disambiguation."""
     return hashlib.sha1(url.encode()).hexdigest()[:length]
+
+
+def _rate_limit_retry_seconds(retry_after: str | None) -> float:
+    """Return a bounded 429 retry delay from Retry-After seconds or HTTP-date."""
+    if not retry_after:
+        return _RATE_LIMIT_RETRY_FALLBACK_SECONDS
+    try:
+        seconds = float(retry_after)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(retry_after)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+        except (TypeError, ValueError, OverflowError):
+            seconds = _RATE_LIMIT_RETRY_FALLBACK_SECONDS
+    seconds = max(0.0, seconds)
+    return min(seconds, _RATE_LIMIT_RETRY_MAX_SECONDS)
 
 
 def _parse_rss_date(
@@ -492,7 +514,8 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
 
     with httpx.Client(follow_redirects=False, timeout=20, headers={"User-Agent": "Mozilla/5.0 (signal-loom)"}) as client:
         current_url = url
-        for _ in range(fetch._MAX_REDIRECTS + 1):
+        rate_limit_retries = 1
+        for _ in range(fetch._MAX_REDIRECTS + 1 + rate_limit_retries):
             resp = client.get(current_url)
             if resp.is_redirect:
                 location = resp.headers.get("location", "")
@@ -505,6 +528,16 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
                     logger.warning("_default_fetch_feed blocked redirect to %s: %s", next_url, exc)
                     raise
                 current_url = next_url
+                continue
+            if resp.status_code == 429 and rate_limit_retries > 0:
+                wait_seconds = _rate_limit_retry_seconds(resp.headers.get("retry-after"))
+                rate_limit_retries -= 1
+                logger.warning(
+                    "rate limited fetching feed %s; retrying after %.1fs",
+                    current_url,
+                    wait_seconds,
+                )
+                time.sleep(wait_seconds)
                 continue
             resp.raise_for_status()
             if len(resp.content) > fetch._MAX_RESPONSE_BYTES:

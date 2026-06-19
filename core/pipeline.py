@@ -37,6 +37,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -304,6 +305,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # ------------------------------------------------------------------ #
     all_new_files: list[Path] = []
     scrape_errors = 0
+    throttle_last_fetch: dict[str, float] = {}
 
     if args.dry_run:
         # Real dry-run: fetch each feed and count items without writing anything
@@ -334,7 +336,21 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     for src in sources:
         logger.info("scraping source: %s (%s)", src.name, src.type)
+        throttle_group = src.throttle_group if src.throttle_seconds > 0 else None
         try:
+            if throttle_group:
+                last_fetch = throttle_last_fetch.get(throttle_group)
+                if last_fetch is not None:
+                    elapsed = time.monotonic() - last_fetch
+                    wait_seconds = src.throttle_seconds - elapsed
+                    if wait_seconds > 0:
+                        logger.info(
+                            "throttling group %s for %.1fs before %s",
+                            src.throttle_group,
+                            wait_seconds,
+                            src.name,
+                        )
+                        time.sleep(wait_seconds)
             new_files = scrape_mod.run_source(
                 src,
                 fetch_feed=fetch_feed_fn,
@@ -346,6 +362,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             logger.warning("scrape failed for source %s: %s", src.name, exc)
             scrape_errors += 1
             continue
+        finally:
+            if throttle_group:
+                throttle_last_fetch[throttle_group] = time.monotonic()
 
     logger.info("pipeline: %d total new file(s) scraped", len(all_new_files))
 

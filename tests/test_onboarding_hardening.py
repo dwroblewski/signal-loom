@@ -369,6 +369,82 @@ def test_listing_fetch_method_browser_skips_direct(tmp_path, monkeypatch):
     assert len(browser_calls) >= 1, "browser fetch must be called in browser mode"
 
 
+def test_pipeline_throttle_waits_from_source_completion_time(tmp_path, monkeypatch):
+    """Same-group throttling must wait after a source finishes, not after it starts."""
+    monkeypatch.chdir(tmp_path)
+
+    topics_path = tmp_path / "topics.yaml"
+    topics_path.write_text("- ai agents\n")
+    aliases_path = tmp_path / "entity-aliases.yaml"
+    aliases_path.write_text("{}\n")
+    content_dir = tmp_path / "content"
+    content_dir.mkdir()
+
+    sources_path = tmp_path / "sources.yaml"
+    sources_path.write_text(
+        "a:\n"
+        "  name: A\n"
+        "  type: rss\n"
+        "  feed_url: https://example.com/a.xml\n"
+        "  output_dir: a\n"
+        "  throttle_group: reddit-rss\n"
+        "  throttle_seconds: 10\n"
+        "b:\n"
+        "  name: B\n"
+        "  type: rss\n"
+        "  feed_url: https://example.com/b.xml\n"
+        "  output_dir: b\n"
+        "  throttle_group: reddit-rss\n"
+        "  throttle_seconds: 10\n"
+        "c:\n"
+        "  name: C\n"
+        "  type: rss\n"
+        "  feed_url: https://example.com/c.xml\n"
+        "  output_dir: c\n"
+        "  throttle_group: other-rss\n"
+        "  throttle_seconds: 10\n"
+    )
+
+    config_path = tmp_path / "signal-loom.yaml"
+    config_path.write_text(
+        "enrichment_model: claude-sonnet-4-6\n"
+        f"content_dir: {content_dir}\n"
+        f"index_path: {tmp_path / 'index.json'}\n"
+        f"sources_path: {sources_path}\n"
+        f"topics_path: {topics_path}\n"
+        f"aliases_path: {aliases_path}\n"
+    )
+
+    clock = {"now": 0.0}
+    sleeps: list[float] = []
+    calls: list[tuple[str, float]] = []
+
+    def fake_monotonic():
+        return clock["now"]
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    def fake_run_source(src, **kwargs):
+        calls.append((src.name, clock["now"]))
+        if src.name == "A":
+            clock["now"] += 65.0
+        return []
+
+    import core.scrape as scrape_mod
+
+    monkeypatch.setattr(pipeline.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(pipeline.time, "sleep", fake_sleep)
+    monkeypatch.setattr(scrape_mod, "run_source", fake_run_source)
+
+    rc = pipeline.main(["--config", str(config_path), "--once", "--no-enrich"])
+
+    assert rc == 0
+    assert sleeps == [10.0]
+    assert calls == [("A", 0.0), ("B", 75.0), ("C", 75.0)]
+
+
 # ---------------------------------------------------------------------------
 # #7 Empty vocab fail-fast
 # ---------------------------------------------------------------------------
