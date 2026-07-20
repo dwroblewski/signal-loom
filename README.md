@@ -296,4 +296,20 @@ uv run python scripts/codex_plugin_e2e.py  # real Codex plugin install/use/write
 
 CI runs `pytest` on the no-key path (all LLM calls are faked or replayed from a recorded fixture), so it never spends money. Architecture and rationale: see the design spec and implementation plan referenced in the repo history.
 
+### Leak protection (public repo)
+
+This is a public repo, so it ships a layered leak-guard. Enable the local hooks once per clone:
+
+```bash
+./scripts/setup-hooks.sh      # points core.hooksPath at .githooks/
+brew install gitleaks         # the secret scanner the hooks use
+```
+
+- **`.githooks/pre-commit`** — scans staged changes; blocks secrets (via `gitleaks`), personal data (`/Users/…`, personal email), and real `config/*.yaml`/`.env` files before they enter history.
+- **`.githooks/pre-push`** — re-scans the commit range being pushed; last local gate before code reaches the remote.
+- **`.claude/settings.json`** — a Claude Code `PreToolUse` guard (`scripts/claude_push_guard.py`) that blocks the agent from `git push`-ing a finding.
+- **GitHub push protection + secret scanning** (repo Settings → Code security) — the server-side net that can't be bypassed with `--no-verify`.
+
+All hooks share `scripts/check-leaks.sh`. Tune false positives in `.gitleaks.toml` rather than reaching for `--no-verify`.
+
 MIT licensed.

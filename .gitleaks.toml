@@ -1,0 +1,19 @@
+# gitleaks config for signal-loom (public repo).
+# Uses the full default rule set; the allowlist below records KNOWN-BENIGN hits
+# so real findings never get lost in noise (false positives are what push people
+# to `--no-verify`, which is the actual danger).
+
+title = "signal-loom leak-guard"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Intentional/benign: example configs and docs security-probe tables (which show whether an env var is PRESENT, never a key value)."
+paths = [
+  '''config/.*\.example\.ya?ml$''',
+  '''docs/spikes/.*\.md$''',
+]
+regexes = [
+  '''(OPENAI|CODEX|ANTHROPIC)_API_KEY=(present|absent)''',
+]
