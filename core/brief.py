@@ -119,16 +119,19 @@ _TIER_ICON = {
 
 
 def _md_escape(text: str) -> str:
-    """Escape markdown link/code metacharacters in untrusted scraped text.
+    """Escape markdown link/code/HTML metacharacters in untrusted scraped text.
 
     Titles and summaries come verbatim from remote feeds / model output. Without
-    escaping, a crafted value like ``x](https://evil/phish) [`` breaks out of a
-    ``[text](url)`` link and forges a second one, and a backtick could open a
-    code span. Escaping ``[``/``]`` neutralizes link/image breakout; parens in
-    plain text are harmless and left alone (the URL uses an angle-bracket
-    destination, so it needs no paren encoding).
+    escaping:
+      * ``x](https://evil/phish) [`` breaks out of a ``[text](url)`` link and
+        forges a second one — escape ``[``/``]``;
+      * a backtick opens a code span — escape `` ` ``;
+      * ``<https://evil>`` is a CommonMark autolink (a first-class link needing
+        no brackets) and ``<a href=…>`` is raw HTML — escape ``<``/``>`` so
+        neither renders as an active link, closing the bypass around _safe_url.
+    Parens in plain text are harmless (the URL uses an angle-bracket destination).
     """
-    for ch in ("\\", "`", "[", "]"):
+    for ch in ("\\", "`", "[", "]", "<", ">"):
         text = text.replace(ch, "\\" + ch)
     return text
 

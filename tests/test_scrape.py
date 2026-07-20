@@ -468,3 +468,29 @@ def test_default_fetch_feed_honors_http_charset_header(httpx_mock, monkeypatch):
     )
     parsed = scrape._default_fetch_feed(url)
     assert parsed.feed.get("title") == "Привет"
+
+
+def test_default_fetch_feed_prolog_beats_lying_http_charset(httpx_mock, monkeypatch):
+    """When the body declares a CORRECT prolog encoding but the server sends a
+    WRONG Content-Type charset (e.g. a legacy iso-8859-1 default), the document's
+    own prolog must win — otherwise the feed silently mojibakes."""
+    import socket
+    from core import fetch as _fetch
+
+    monkeypatch.setattr(
+        _fetch.socket, "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))],
+    )
+    url = "https://example.com/feed.xml"
+    # windows-1251 body for 'Привет', correctly declared in the prolog...
+    body = (
+        b"<?xml version='1.0' encoding='windows-1251'?><rss version='2.0'><channel>"
+        b"<title>\xcf\xf0\xe8\xe2\xe5\xf2</title></channel></rss>"
+    )
+    # ...but the server lies with a Latin-1 charset (which would decode wrongly).
+    httpx_mock.add_response(
+        url=url, status_code=200, content=body,
+        headers={"Content-Type": "text/xml; charset=iso-8859-1"},
+    )
+    parsed = scrape._default_fetch_feed(url)
+    assert parsed.feed.get("title") == "Привет"

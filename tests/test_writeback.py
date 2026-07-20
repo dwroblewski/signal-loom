@@ -169,3 +169,21 @@ def test_main_stdin_still_works(tmp_path):
     assert rc == 0, "CLI must succeed reading from stdin"
     post = frontmatter.load(str(md))
     assert post.metadata.get("enriched") is True
+
+
+def test_default_failed_queue_path_boundary_cases(tmp_path, monkeypatch):
+    """The queue must track content_dir: for a 'config'-named project ROOT it stays
+    INSIDE (dotfiles ~/config), while a legacy <project>/config/ goes up one level."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # dotfiles: project root literally named 'config' at $HOME → queue inside it
+    dot = tmp_path / "config" / "signal-loom.yaml"
+    dot.parent.mkdir()
+    assert wb.default_failed_queue_path(dot) == tmp_path / "config" / "failed-enrichments.jsonl"
+    # legacy <project>/config/ (parent is a real project, not $HOME) → queue at project level
+    legacy = tmp_path / "proj" / "config" / "signal-loom.yaml"
+    legacy.parent.mkdir(parents=True)
+    assert wb.default_failed_queue_path(legacy) == tmp_path / "proj" / "failed-enrichments.jsonl"
+    # plain root config → queue beside it
+    plain = tmp_path / "myproj" / "signal-loom.yaml"
+    plain.parent.mkdir()
+    assert wb.default_failed_queue_path(plain) == tmp_path / "myproj" / "failed-enrichments.jsonl"

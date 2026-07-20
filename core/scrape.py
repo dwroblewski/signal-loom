@@ -72,6 +72,15 @@ def _url_hash(url: str, length: int = 6) -> str:
     return hashlib.sha1(url.encode()).hexdigest()[:length]
 
 
+_XML_PROLOG_ENCODING_RE = re.compile(rb"<\?xml[^>]*\bencoding\s*=", re.IGNORECASE)
+
+
+def _has_prolog_encoding(body: bytes) -> bool:
+    """True if the XML body declares an encoding in its ``<?xml … encoding=…?>``
+    prolog. Only the leading bytes are inspected (the prolog is first)."""
+    return bool(_XML_PROLOG_ENCODING_RE.search(body[:200]))
+
+
 def _rate_limit_retry_seconds(retry_after: str | None) -> float:
     """Return a bounded 429 retry delay from Retry-After seconds or HTTP-date."""
     if not retry_after:
@@ -328,7 +337,16 @@ def _run_rss(
         # valid RSS shape) still get a stable per-item discriminator instead of
         # collapsing to a bare title that would falsely dedup distinct items.
         clean_title = _sanitize_filename(title)
-        dedup_id = link or getattr(entry, "id", "") or getattr(entry, "guid", "") or ""
+        # Per-item discriminator, most-stable first: link → guid/id → (title+body).
+        # The final title+description fallback covers the legal RSS shape with no
+        # link AND no guid, so two genuinely different same-titled items still get
+        # distinct stems instead of colliding under the date-agnostic dedup.
+        dedup_id = (
+            link
+            or getattr(entry, "id", "")
+            or getattr(entry, "guid", "")
+            or f"{title}\n{description}"
+        )
         url_suffix = f"-{_url_hash(dedup_id)}" if dedup_id else ""
         filename_stem = f"{clean_title}{url_suffix}"
 
@@ -559,11 +577,16 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
                 time.sleep(wait_seconds)
                 continue
             resp.raise_for_status()
-            # Pass raw bytes + the HTTP headers: feedparser then applies its full
-            # encoding precedence (HTTP Content-Type charset > XML prolog encoding
-            # > BOM), so feeds declaring their charset in EITHER place decode
-            # correctly. Passing httpx's pre-decoded resp.text would lose the
-            # prolog; passing bytes alone would lose the HTTP charset.
+            # Decode precedence, chosen to be correct for BOTH real-world cases:
+            #   * body declares its own encoding in the <?xml … encoding=…?> prolog
+            #     → trust the DOCUMENT (parse bytes only). Per RFC 3023 feedparser
+            #     would otherwise let a wrong/legacy HTTP charset (e.g. a server's
+            #     default text/xml; charset=iso-8859-1) override a correct prolog
+            #     and silently mojibake the feed.
+            #   * body has NO prolog encoding → pass the HTTP headers so feedparser
+            #     can use the Content-Type charset (the only signal available).
+            if _has_prolog_encoding(body):
+                return fetch.parse_feed(body)
             return fetch.parse_feed(body, response_headers=dict(resp.headers))
         raise ValueError(f"Too many redirects fetching feed {url}")
 

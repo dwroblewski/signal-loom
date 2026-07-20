@@ -283,3 +283,11 @@ def test_render_balanced_paren_url_renders_as_valid_link(tmp_path):
     # Angle-bracket destination keeps the parens intact and balanced.
     assert f"(<{url}>)" in md
     assert "%29" not in md
+
+
+def test_render_neutralizes_autolink_in_title(tmp_path):
+    """A CommonMark autolink <https://evil> needs no brackets and would bypass
+    _safe_url — _md_escape must neutralize it so it doesn't render as a link."""
+    md = _build_md(tmp_path, [_entry(title="<https://evil.example/phish>", url="")])
+    # The '<' is backslash-escaped, so no active autolink forms.
+    assert "\\<https://evil.example/phish\\>" in md
