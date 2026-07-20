@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Signal Loom final logo sheet</title>
+  <desc id="desc">Final Signal Loom logo, icon, dark mode lockup, and small-size checks.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f5ef; }
+      .card { fill: #ffffff; stroke: #d9ded8; stroke-width: 2; }
+      .ink { fill: #17212b; }
+      .muted { fill: #66716d; }
+      .label { font-family: Avenir Next, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 760; letter-spacing: 0; }
+      .copy { font-family: Avenir Next, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 450; letter-spacing: 0; }
+    </style>
+    <g id="mark">
+      <rect width="160" height="160" rx="38" fill="#fbfcfa" stroke="#17212b" stroke-width="8"/>
+      <path d="M48 36 V124M80 36 V124M112 36 V124" fill="none" stroke="#17212b" stroke-width="10" stroke-linecap="round"/>
+      <path d="M32 58 H60 C71 58 70 82 80 82 C90 82 89 58 100 58 H128" fill="none" stroke="#10b8a6" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M32 80 H128" fill="none" stroke="#f4b84a" stroke-width="10" stroke-linecap="round"/>
+      <path d="M32 102 H61 C71 102 71 80 80 80 C90 80 89 102 100 102 H128" fill="none" stroke="#ef6f6c" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M48 36 V52M48 87 V95M48 109 V124M80 36 V72M80 90 V124M112 36 V52M112 87 V95M112 109 V124" fill="none" stroke="#17212b" stroke-width="10" stroke-linecap="round"/>
+    </g>
+    <g id="mark-one">
+      <rect width="160" height="160" rx="38" fill="#fbfcfa" stroke="#17212b" stroke-width="8"/>
+      <path d="M48 36 V124M80 36 V124M112 36 V124" fill="none" stroke="#17212b" stroke-width="10" stroke-linecap="round"/>
+      <path d="M32 58 H60 C71 58 70 82 80 82 C90 82 89 58 100 58 H128" fill="none" stroke="#17212b" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M32 80 H128" fill="none" stroke="#17212b" stroke-width="10" stroke-linecap="round"/>
+      <path d="M32 102 H61 C71 102 71 80 80 80 C90 80 89 102 100 102 H128" fill="none" stroke="#17212b" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </defs>
+  <rect class="bg" width="1440" height="900"/>
+  <text x="72" y="94" class="label ink" font-size="46">signal-loom final direction</text>
+  <text x="72" y="136" class="copy muted" font-size="22">A loom-grid mark: source threads cross a stable structure and become searchable fabric.</text>
+
+  <rect x="72" y="190" width="1296" height="260" rx="30" class="card"/>
+  <use href="#mark" x="132" y="240"/>
+  <text x="342" y="328" class="label ink" font-size="74">signal-loom</text>
+  <text x="346" y="382" class="copy muted" font-size="28">sources into searchable briefs</text>
+
+  <rect x="72" y="500" width="300" height="260" rx="30" class="card"/>
+  <text x="122" y="558" class="label ink" font-size="28">Icon</text>
+  <use href="#mark" x="142" y="584"/>
+
+  <rect x="402" y="500" width="300" height="260" rx="30" class="card"/>
+  <text x="452" y="558" class="label ink" font-size="28">One color</text>
+  <use href="#mark-one" x="472" y="584"/>
+
+  <rect x="732" y="500" width="300" height="260" rx="30" fill="#17212b"/>
+  <text x="782" y="558" class="label" fill="#f6f5ef" font-size="28">Dark</text>
+  <g transform="translate(802 584)">
+    <rect width="160" height="160" rx="38" fill="#22303a" stroke="#f6f5ef" stroke-width="8"/>
+    <path d="M48 36 V124M80 36 V124M112 36 V124" fill="none" stroke="#f6f5ef" stroke-width="10" stroke-linecap="round"/>
+    <path d="M32 58 H60 C71 58 70 82 80 82 C90 82 89 58 100 58 H128" fill="none" stroke="#10b8a6" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M32 80 H128" fill="none" stroke="#f4b84a" stroke-width="10" stroke-linecap="round"/>
+    <path d="M32 102 H61 C71 102 71 80 80 80 C90 80 89 102 100 102 H128" fill="none" stroke="#ef6f6c" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M48 36 V52M48 87 V95M48 109 V124M80 36 V72M80 90 V124M112 36 V52M112 87 V95M112 109 V124" fill="none" stroke="#f6f5ef" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <rect x="1062" y="500" width="306" height="260" rx="30" class="card"/>
+  <text x="1112" y="558" class="label ink" font-size="28">Small</text>
+  <g transform="translate(1118 628) scale(.32)"><use href="#mark"/></g>
+  <g transform="translate(1194 612) scale(.48)"><use href="#mark"/></g>
+  <g transform="translate(1300 590) scale(.68)"><use href="#mark"/></g>
+  <text x="1128" y="722" class="copy muted" font-size="18">16</text>
+  <text x="1210" y="722" class="copy muted" font-size="18">32</text>
+  <text x="1326" y="722" class="copy muted" font-size="18">64</text>
+</svg>

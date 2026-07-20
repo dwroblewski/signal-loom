@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Signal Loom brand exploration</title>
+  <desc id="desc">Three logo and icon concepts for Signal Loom, plus the recommended direction.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f5ef; }
+      .panel { fill: #ffffff; stroke: #d9ded8; stroke-width: 2; }
+      .ink { fill: #17212b; }
+      .muted { fill: #66716d; }
+      .teal { stroke: #10b8a6; }
+      .amber { stroke: #f4b84a; }
+      .coral { stroke: #ef6f6c; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .label { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 760; letter-spacing: 0; }
+      .copy { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 450; letter-spacing: 0; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-weight: 600; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+
+  <text x="72" y="92" class="label ink" font-size="46">signal-loom identity exploration</text>
+  <text x="72" y="134" class="copy muted" font-size="22">Goal: data signals woven into a human-readable, file-owned knowledge layer.</text>
+
+  <rect x="72" y="188" width="392" height="500" rx="28" class="panel"/>
+  <rect x="524" y="188" width="392" height="500" rx="28" class="panel"/>
+  <rect x="976" y="188" width="392" height="500" rx="28" class="panel"/>
+
+  <!-- Concept A -->
+  <g transform="translate(196 270)">
+    <rect x="0" y="0" width="144" height="144" rx="34" fill="#fbfcfa" stroke="#17212b" stroke-width="8"/>
+    <path d="M38 28 V116" class="line" stroke="#17212b" stroke-width="10" opacity=".86"/>
+    <path d="M72 28 V116" class="line" stroke="#17212b" stroke-width="10" opacity=".86"/>
+    <path d="M106 28 V116" class="line" stroke="#17212b" stroke-width="10" opacity=".86"/>
+    <path d="M24 52 H120" class="line amber" stroke-width="9"/>
+    <path d="M24 92 H120" class="line coral" stroke-width="9"/>
+    <path d="M24 86 C40 42 58 42 72 72 S102 108 120 58" class="line" stroke="#fbfcfa" stroke-width="18"/>
+    <path d="M24 86 C40 42 58 42 72 72 S102 108 120 58" class="line teal" stroke-width="9"/>
+    <circle cx="38" cy="52" r="9" fill="#17212b"/>
+    <circle cx="72" cy="72" r="9" fill="#10b8a6" stroke="#fbfcfa" stroke-width="4"/>
+    <circle cx="106" cy="92" r="9" fill="#ef6f6c"/>
+  </g>
+  <text x="132" y="472" class="label ink" font-size="28">A. Woven signal</text>
+  <text x="132" y="514" class="copy muted" font-size="18">Best small icon. Feels like sources</text>
+  <text x="132" y="540" class="copy muted" font-size="18">being braided into one useful brief.</text>
+  <text x="132" y="596" class="mono ink" font-size="24">signal-loom</text>
+
+  <!-- Concept B -->
+  <g transform="translate(648 270)">
+    <rect x="22" y="26" width="100" height="116" rx="16" fill="#fbfcfa" stroke="#17212b" stroke-width="7"/>
+    <rect x="6" y="10" width="100" height="116" rx="16" fill="#ffffff" stroke="#17212b" stroke-width="7"/>
+    <path d="M30 42 H82" class="line amber" stroke-width="8"/>
+    <path d="M30 68 H72" class="line teal" stroke-width="8"/>
+    <path d="M30 94 C46 70 64 118 82 94" class="line coral" stroke-width="8"/>
+    <circle cx="94" cy="42" r="9" fill="#10b8a6"/>
+    <circle cx="92" cy="94" r="9" fill="#f4b84a"/>
+  </g>
+  <text x="584" y="472" class="label ink" font-size="28">B. Indexed brief</text>
+  <text x="584" y="514" class="copy muted" font-size="18">Readable and practical, but more like</text>
+  <text x="584" y="540" class="copy muted" font-size="18">a note app than a distinctive product.</text>
+  <text x="584" y="596" class="mono ink" font-size="24">signal-loom</text>
+
+  <!-- Concept C -->
+  <g transform="translate(1100 270)">
+    <rect x="0" y="0" width="144" height="144" rx="72" fill="#17212b"/>
+    <path d="M38 90 C38 56 62 46 84 56 C106 66 100 96 72 96" class="line teal" stroke-width="11"/>
+    <path d="M72 38 V106 H112" class="line amber" stroke-width="11"/>
+    <path d="M34 54 H108" class="line coral" stroke-width="8" opacity=".92"/>
+    <circle cx="72" cy="54" r="8" fill="#f6f5ef"/>
+    <circle cx="72" cy="96" r="8" fill="#f6f5ef"/>
+  </g>
+  <text x="1036" y="472" class="label ink" font-size="28">C. S/L monogram</text>
+  <text x="1036" y="514" class="copy muted" font-size="18">More brand-like, but less obvious</text>
+  <text x="1036" y="540" class="copy muted" font-size="18">about what the product actually does.</text>
+  <text x="1036" y="596" class="mono ink" font-size="24">signal-loom</text>
+
+  <rect x="72" y="734" width="1296" height="92" rx="22" fill="#17212b"/>
+  <text x="112" y="792" class="label" fill="#f6f5ef" font-size="28">Recommendation: refine A.</text>
+  <text x="476" y="792" class="copy" fill="#dfe7e2" font-size="22">It is the clearest metaphor, scales well, and avoids looking like a generic feed reader.</text>
+</svg>

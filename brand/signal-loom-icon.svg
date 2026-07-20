@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Signal Loom icon</title>
+  <desc id="desc">A compact loom mark where colored source threads weave through dark vertical warp lines.</desc>
+  <rect width="128" height="128" rx="30" fill="#f6f5ef"/>
+  <rect x="10" y="10" width="108" height="108" rx="25" fill="#fbfcfa" stroke="#17212b" stroke-width="6"/>
+  <path d="M38 28 V100M64 28 V100M90 28 V100" fill="none" stroke="#17212b" stroke-width="8" stroke-linecap="round"/>
+  <path d="M25 47 H48 C57 47 56 66 64 66 C72 66 71 47 80 47 H103" fill="none" stroke="#10b8a6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 64 H103" fill="none" stroke="#f4b84a" stroke-width="8" stroke-linecap="round"/>
+  <path d="M25 81 H49 C57 81 57 64 64 64 C72 64 71 81 80 81 H103" fill="none" stroke="#ef6f6c" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38 28 V42M38 69 V76M38 86 V100M64 28 V58M64 72 V100M90 28 V42M90 69 V76M90 86 V100" fill="none" stroke="#17212b" stroke-width="8" stroke-linecap="round"/>
+</svg>
