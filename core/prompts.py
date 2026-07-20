@@ -11,7 +11,7 @@ Two shapes:
 """
 from pathlib import Path
 
-SPEC = (Path(__file__).parent / "enrichment_spec.md").read_text()
+SPEC = (Path(__file__).parent / "enrichment_spec.md").read_text(encoding="utf-8")
 
 
 def _vocab_line(vocabulary: set[str]) -> str:

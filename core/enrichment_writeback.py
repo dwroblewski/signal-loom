@@ -119,6 +119,13 @@ def _atomic_write(path: Path, content: str) -> None:
         tmp_path = Path(tmp_str)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(content)
+        # mkstemp creates the temp file 0600; carry over the original file's mode
+        # so an atomic enrichment write doesn't silently strip read permissions
+        # (e.g. from a world-readable vault file being re-enriched).
+        try:
+            os.chmod(tmp_path, path.stat().st_mode & 0o777)
+        except OSError:
+            pass
         os.replace(tmp_path, path)  # monkeypatched in tests via wb.os.replace
         tmp_path = None  # successfully replaced — no cleanup needed
     finally:
@@ -210,9 +217,14 @@ def apply(
         # Failed this attempt — accumulate errors.
         all_errors.extend(errors)
 
-        if attempt < max_attempts and regenerate is not None:
+        # Without a regenerator, retrying re-parses the exact same input and can
+        # only reproduce the same errors — stop after the first attempt instead
+        # of looping and tripling the error list.
+        if regenerate is None:
+            return Result(ok=False, attempts=attempt, errors=all_errors)
+        if attempt < max_attempts:
             raw = regenerate()
-        elif attempt == max_attempts:
+        else:
             break
 
     return Result(ok=False, attempts=max_attempts, errors=all_errors)
@@ -271,6 +283,7 @@ def apply_batch(
     """
     succeeded = 0
     failed: list[Path] = []
+    failed_errors: dict[Path, list[str]] = {}
 
     for path, raw in mapping.items():
         try:
@@ -280,15 +293,17 @@ def apply_batch(
             else:
                 logger.warning("apply failed for %s: %s", path, result.errors)
                 failed.append(path)
+                failed_errors[path] = result.errors
         except Exception as exc:  # noqa: BLE001
             logger.exception("unexpected error writing %s: %s", path, exc)
             failed.append(path)
+            failed_errors[path] = [str(exc)]
 
-    # Write re-run queue.
+    # Write re-run queue, preserving each failure's actual errors (not []).
     if failed:
         try:
             for p in failed:
-                append_failed_queue(p, [], queue_path=_FAILED_QUEUE)
+                append_failed_queue(p, failed_errors.get(p, []), queue_path=_FAILED_QUEUE)
         except OSError as exc:
             logger.warning("could not write failed-enrichments queue: %s", exc)
 

@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from core.config import PACKAGE_CONFIG_DIR, find_existing_configs
+from core.config import PACKAGE_CONFIG_DIR, find_existing_configs, _walkup_search
 
 # Project root = parent of the `core/` package.
 _PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
@@ -178,10 +178,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         others = [
             p for p in find_existing_configs(target_dir) if p.resolve() != target_self.resolve()
         ]
+        # Also walk UP: scaffolding inside a subdirectory of an already-configured
+        # project would write a config that shadows the parent's for the whole
+        # subtree. The downward scan above can't see a config in a PARENT.
+        parent_found, _ = _walkup_search(target_dir)
+        if parent_found is not None and parent_found.resolve() != target_self.resolve():
+            if parent_found.resolve() not in {p.resolve() for p in others}:
+                others.append(parent_found)
         if others:
             listed = "\n  ".join(str(p) for p in others)
             print(
-                f"signal-loom: found existing config(s) under {target_dir}:\n  {listed}\n\n"
+                f"signal-loom: found existing config(s) at or above {target_dir}:\n  {listed}\n\n"
                 "Refusing to scaffold a new config — this project looks already set up.\n"
                 "  • To USE an existing config:  run the pipeline with "
                 "`--config <one of the paths above>`\n"

@@ -1,9 +1,15 @@
+from pathlib import Path
+
 from core import config
 import pytest
 
+# Anchor example-config paths to the repo root so these tests pass regardless of
+# the directory pytest is invoked from (not just from the repo root).
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_loads_example_sources():
-    srcs = config.load_sources("config/sources.example.yaml")
+    srcs = config.load_sources(str(ROOT / "config/sources.example.yaml"))
     assert all(s.type in {"rss", "youtube", "listing"} for s in srcs) and any(
         s.keyword_filter for s in srcs
     )
@@ -18,18 +24,18 @@ def test_rejects_unknown_type(tmp_path):
 
 
 def test_loads_topic_vocabulary():
-    vocab = config.load_vocabulary("config/topics.example.yaml")
+    vocab = config.load_vocabulary(str(ROOT / "config/topics.example.yaml"))
     assert isinstance(vocab, set) and len(vocab) >= 3
 
 
 def test_loads_aliases():
-    aliases = config.load_aliases("config/entity-aliases.example.yaml")
+    aliases = config.load_aliases(str(ROOT / "config/entity-aliases.example.yaml"))
     assert isinstance(aliases, dict)
 
 
 def test_settings_default_model():
     assert (
-        config.load_settings("config/signal-loom.example.yaml").enrichment_model
+        config.load_settings(str(ROOT / "config/signal-loom.example.yaml")).enrichment_model
         == "claude-sonnet-4-6"
     )
 
@@ -93,3 +99,37 @@ def test_accepts_relative_output_dir(tmp_path):
     )
     sources = config.load_sources(str(p))
     assert sources and sources[0].output_dir == "content/my-source"
+
+
+def test_config_named_project_root_keeps_output_inside(tmp_path, monkeypatch):
+    """A project whose ROOT is literally named 'config' (e.g. a dotfiles repo
+    scaffolded via `core.init --to ~/config`) must NOT get `../` defaults that
+    escape it. The legacy `<project>/config/` layout still gets `../`."""
+    import os
+    home = tmp_path
+    monkeypatch.setenv("HOME", str(home))
+    cfgdir = home / "config"
+    cfgdir.mkdir()
+    (cfgdir / "signal-loom.yaml").write_text("enrichment_model: claude-sonnet-4-6\n")
+
+    settings = config.load_settings(cfgdir / "signal-loom.yaml")
+
+    assert ".." not in Path(settings.content_dir).parts
+    assert ".." not in Path(settings.index_path).parts
+    # Output resolves INSIDE ~/config, not ~/content.
+    assert os.path.realpath(settings.content_dir) == os.path.realpath(cfgdir / "content")
+
+
+def test_legacy_config_subdir_still_uses_parent_defaults(tmp_path, monkeypatch):
+    """The legacy `<project>/config/signal-loom.yaml` layout keeps output beside
+    the repo (../content), not buried in config/."""
+    import os
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "myproject"
+    cfgdir = project / "config"
+    cfgdir.mkdir(parents=True)
+    (cfgdir / "signal-loom.yaml").write_text("enrichment_model: claude-sonnet-4-6\n")
+
+    settings = config.load_settings(cfgdir / "signal-loom.yaml")
+
+    assert os.path.realpath(settings.content_dir) == os.path.realpath(project / "content")

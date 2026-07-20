@@ -1,6 +1,6 @@
 {
   "name": "signal-loom",
-  "version": "0.2.0",
+  "version": "0.3.2",
   "description": "Personal intelligence pipeline: sources -> scrape -> enrich -> brief.",
   "author": {
     "name": "Daniel Wroblewski"

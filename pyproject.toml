@@ -1,6 +1,6 @@
 [project]
 name = "signal-loom"
-version = "0.1.0"
+version = "0.3.2"
 description = "A personal intelligence pipeline: declarative sources → scrape → AI-enrich → index → brief."
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -24,5 +24,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
-markers = ["skeleton: end-to-end contract, enabled at Task D3"]
-addopts = "-m 'not skeleton'"
+markers = ["skeleton: end-to-end contract (also runnable in isolation via -m skeleton)"]

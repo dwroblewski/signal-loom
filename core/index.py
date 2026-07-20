@@ -54,11 +54,12 @@ def _build_entry(md_path: Path, content_dir: Path) -> dict | None:
 
     Returns:
         An entry dict, or ``None`` if the file lacks ``enriched: true``.
+
+    A frontmatter parse error is NOT swallowed here — it propagates to
+    :func:`build_index`, which logs a visible "skipping malformed file" warning
+    so corrupted files don't silently vanish from the index.
     """
-    try:
-        post = frontmatter.load(str(md_path))
-    except Exception:
-        return None
+    post = frontmatter.load(str(md_path))
 
     fm = post.metadata
 
@@ -143,7 +144,10 @@ def build_index(
     try:
         fd, tmp_path_str = tempfile.mkstemp(dir=out_path.parent, suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(result, indent=2))
+            # default=str keeps one date-typed YAML value (e.g. `tags: [2026-07-01]`,
+            # which YAML parses to datetime.date) from raising TypeError and
+            # aborting the entire rebuild — it is serialized as its ISO string.
+            fh.write(json.dumps(result, indent=2, default=str))
         os.replace(tmp_path_str, out_path)
         tmp_path_str = None  # replaced successfully — no cleanup needed
     finally:

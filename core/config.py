@@ -215,19 +215,25 @@ def find_existing_configs(start: Path, *, limit: int = 25) -> list[Path]:
 
     found: list[Path] = []
     seen: set[Path] = set()
-    for path in start.rglob("signal-loom.yaml"):
-        if any(part in _SCAN_SKIP_DIRS for part in path.parts):
-            continue
-        try:
-            resolved = path.resolve()
-        except OSError:
-            resolved = path
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        found.append(path)
-        if len(found) >= limit:
-            break
+    # Match every layout the walk-up resolver recognizes, not just the bare
+    # `signal-loom.yaml` — otherwise the init anti-clobber guard and the
+    # "config found" error hint are blind to `.signal-loom.yaml` and
+    # `.signal-loom/config.yaml` projects and would scaffold a shadowing config.
+    # (`config/signal-loom.yaml` is already covered by the bare glob.)
+    for pattern in ("signal-loom.yaml", ".signal-loom.yaml", ".signal-loom/config.yaml"):
+        for path in start.rglob(pattern):
+            if any(part in _SCAN_SKIP_DIRS for part in path.parts):
+                continue
+            try:
+                resolved = path.resolve()
+            except OSError:
+                resolved = path
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            found.append(path)
+            if len(found) >= limit:
+                return sorted(found)
     return sorted(found)
 
 
@@ -438,6 +444,15 @@ def load_sources(path: str) -> list[SourceConfig]:
             enabled=bool(data.get("enabled", True)),
         )
 
+        # Throttling needs BOTH keys; warn on a half-configured source that would
+        # otherwise silently never throttle.
+        if bool(src.throttle_group) != (src.throttle_seconds > 0):
+            logger.warning(
+                "source '%s': throttle_group and throttle_seconds must BOTH be set "
+                "to throttle — one without the other is ignored.",
+                key,
+            )
+
         if src.enabled:
             sources.append(src)
 
@@ -466,7 +481,14 @@ def load_settings(path: str | Path) -> Settings:
             return str((config_dir / p).resolve())
         return v
 
-    if config_dir.name == "config":
+    # Legacy `<project>/config/signal-loom.yaml` layout keeps output beside the
+    # repo (../content), NOT buried in config/. But a project whose ROOT is
+    # literally named "config" (e.g. a dotfiles repo scaffolded via
+    # `core.init --to ~/config`) must NOT get `../` defaults that escape it.
+    # Distinguish by the boundary: the legacy layout's config/ sits inside a
+    # project, so its parent is below $HOME; a `config`-named project root sits
+    # directly at the $HOME/filesystem boundary.
+    if config_dir.name == "config" and config_dir.resolve().parent != _walkup_boundary():
         default_content_dir = "../content"
         default_index_path = "../index.json"
     else:

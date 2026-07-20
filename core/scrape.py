@@ -137,17 +137,28 @@ def _parse_rss_date(
     return datetime.now().strftime("%Y-%m-%d")
 
 
-def _file_exists_check(output_dir: Path, date_str: str, filename_stem: str) -> bool:
-    """Return True if a file matching the exact filename stem already exists.
+_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} - ")
 
-    ``filename_stem`` is the full sanitized title (including any URL hash suffix)
-    that will be used verbatim in the filename.  We match on the exact prefix
-    ``"<date> - <stem>"`` so two items that happen to share a long title prefix
-    but have different URL hashes are NOT considered duplicates of each other.
+
+def _file_exists_check(output_dir: Path, date_str: str, filename_stem: str) -> bool:
+    """Return True if a file with this exact stem already exists, ANY date.
+
+    ``filename_stem`` is the full sanitized title including a per-URL hash
+    suffix, so it uniquely identifies the item independent of publish date.
+    We deliberately match on the stem alone (ignoring the ``<date> - `` prefix):
+    sources like YouTube flat-playlist expose no ``upload_date`` and RSS items
+    can lack a parseable date, in which case the date falls back to *today* and
+    changes every run — keying dedup on the date would then re-write the same
+    item as a new file daily, re-incurring enrichment cost and polluting the
+    index.  ``date_str`` is accepted for call-site symmetry but not matched on.
     """
-    prefix = f"{date_str} - {filename_stem}"
-    for f in output_dir.iterdir() if output_dir.exists() else []:
-        if f.name.startswith(prefix):
+    if not output_dir.exists():
+        return False
+    for f in output_dir.iterdir():
+        if not f.name.endswith(".md"):
+            continue
+        stem = _DATE_PREFIX_RE.sub("", f.name[:-3], count=1)
+        if stem == filename_stem:
             return True
     return False
 
@@ -262,7 +273,7 @@ def _write_markdown(
         tags=list(src.tags),
         perspective=src.perspective or "",
     )
-    filepath.write_text(frontmatter.dumps(post))
+    filepath.write_text(frontmatter.dumps(post), encoding="utf-8")
     return filepath
 
 
@@ -311,19 +322,22 @@ def _run_rss(
             if not _matches_keyword_filter(combined, src.keyword_filter):
                 continue
 
-        # Fetch full article body if configured
-        if src.scrape_full_content and link:
-            fetched = fetch_article(link)
-            if fetched and len(fetched.split()) >= 100:
-                content = fetched
-
         # Build filename stem: sanitize + append URL hash to avoid truncation collisions
         clean_title = _sanitize_filename(title)
         url_suffix = f"-{_url_hash(link)}" if link else ""
         filename_stem = f"{clean_title}{url_suffix}"
 
+        # Dedup BEFORE the expensive full-article fetch: everything the dedup key
+        # needs (stem) is known here, so skip already-scraped items without
+        # re-downloading them every run (which otherwise defeats the throttle).
         if _file_exists_check(output_dir, date_str, filename_stem):
             continue
+
+        # Fetch full article body if configured
+        if src.scrape_full_content and link:
+            fetched = fetch_article(link)
+            if fetched and len(fetched.split()) >= 100:
+                content = fetched
 
         item = ScrapedItem(
             title=title,
@@ -516,7 +530,7 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
         current_url = url
         rate_limit_retries = 1
         for _ in range(fetch._MAX_REDIRECTS + 1 + rate_limit_retries):
-            resp = client.get(current_url)
+            resp, body = fetch.stream_get_capped(client, current_url)
             if resp.is_redirect:
                 location = resp.headers.get("location", "")
                 if not location:
@@ -540,11 +554,10 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
                 time.sleep(wait_seconds)
                 continue
             resp.raise_for_status()
-            if len(resp.content) > fetch._MAX_RESPONSE_BYTES:
-                raise ValueError(
-                    f"Feed response for {url} exceeds 10 MB ({len(resp.content)} bytes) — skipping."
-                )
-            return fetch.parse_feed(resp.text)
+            # Pass raw bytes: feedparser then honors the XML prolog's declared
+            # encoding (windows-1251, ISO-8859-1, …) instead of trusting httpx's
+            # HTTP-charset guess, which mangles feeds that omit a charset header.
+            return fetch.parse_feed(body)
         raise ValueError(f"Too many redirects fetching feed {url}")
 
 
@@ -735,7 +748,11 @@ def _direct_fetch_listing(url: str) -> Optional[str]:
         ) as client:
             current_url = url
             for _ in range(_fetch_mod._MAX_REDIRECTS + 1):
-                resp = client.get(current_url)
+                try:
+                    resp, body = _fetch_mod.stream_get_capped(client, current_url)
+                except _fetch_mod.ResponseTooLarge as exc:
+                    logger.warning("_direct_fetch_listing: %s — skipping", exc)
+                    return None
                 if resp.is_redirect:
                     location = resp.headers.get("location", "")
                     if not location:
@@ -745,13 +762,7 @@ def _direct_fetch_listing(url: str) -> Optional[str]:
                     current_url = next_url
                     continue
                 resp.raise_for_status()
-                if len(resp.content) > _fetch_mod._MAX_RESPONSE_BYTES:
-                    logger.warning(
-                        "_direct_fetch_listing: response for %s exceeds 10 MB — skipping",
-                        url,
-                    )
-                    return None
-                return resp.text
+                return body.decode(resp.encoding or "utf-8", errors="replace")
             logger.warning("_direct_fetch_listing: too many redirects for %s", url)
             return None
     except Exception as exc:

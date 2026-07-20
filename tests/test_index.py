@@ -113,3 +113,19 @@ def test_index_atomic_write_no_partial_on_failure(tmp_path, monkeypatch):
     assert not out.exists(), "Partial index.json must not be left on disk after failed atomic write"
     # No .tmp files left behind either
     assert list(tmp_path.glob("*.tmp*")) == [], "Temp file must be cleaned up after failure"
+
+
+def test_build_index_survives_date_typed_yaml_value(tmp_path):
+    """A YAML value parsed to datetime.date (e.g. `tags: [2026-07-01]`) must not
+    abort the whole rebuild with a TypeError — it is serialized via default=str."""
+    import datetime
+    good = tmp_path / "good.md"
+    good.write_text("---\nenriched: true\ntitle: Good\n---\nbody", encoding="utf-8")
+    # frontmatter with an unquoted date inside a list field → datetime.date
+    bad = tmp_path / "bad.md"
+    bad.write_text("---\nenriched: true\ntitle: Bad\ntags:\n  - 2026-07-01\n---\nbody", encoding="utf-8")
+    out = tmp_path / "index.json"
+    result = index.build_index(tmp_path, out)  # must not raise
+    assert out.exists()
+    titles = {e["title"] for e in result["entries"]}
+    assert {"Good", "Bad"} <= titles

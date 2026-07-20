@@ -106,7 +106,7 @@ in their project.
   should print `<project>/sources.yaml` and exit 0. If it only works with the
   env var set, that is the antipattern recurring — fix the root cause, not the env.
 - **Don't ship one-off env-var workarounds; align skills with the resolver.**
-  `pipeline` is the reference (it never computes a config path, it defers to the
-  resolver). `brief` and `enrich` (SKILL.md:16) and `README.md` still recommend
-  the env var — the old antipattern. When touching first-run behavior, fix those
-  at the source rather than patching around them.
+  All skills (`pipeline`, `brief`, `enrich`) and the README now defer to the
+  core resolver and never compute a config path or require an env var. Keep it
+  that way: when touching first-run behavior, fix the config location at the
+  source rather than reintroducing an `export SIGNAL_LOOM_CONFIG=…` workaround.

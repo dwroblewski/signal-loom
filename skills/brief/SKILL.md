@@ -50,8 +50,9 @@ CONFIG_ARG=""
    - One bullet per entry: `[title](url)` · source · published date + one-line summary snippet
    - With `--verify`: each link annotated ✓ live / ⚠ stale / ✗ dead
 
-3. **Offer to save** the digest to `content/briefs/<date>.md` if the user wants a persistent copy:
+3. **Offer to save** the digest to `content/briefs/<date>.md` if the user wants a persistent copy (create the directory first — the shell redirect fails if it doesn't exist):
    ```
+   mkdir -p content/briefs
    uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.brief \
        $CONFIG_ARG \
        --since 7d --verify > content/briefs/$(date +%F).md
@@ -65,7 +66,7 @@ CONFIG_ARG=""
 | `--until` | (none) | ISO date upper bound |
 | `--verify` | off | HEAD-check every unique URL; adds ~1–3s per URL |
 | `--limit` | 50 | Cap on entries included |
-| `--index` | `index.json` | Path to the index file |
+| `--index` | config-resolved `index_path` | Path to the index file. Defaults to the `index_path` from the resolved config; only falls back to `index.json` in cwd when no config is found. |
 
 ## Verification tiers
 

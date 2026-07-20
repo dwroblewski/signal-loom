@@ -92,12 +92,17 @@ def should_skip(path: Path, relative_to_source: Path) -> bool:
         return True
     if path.name in SKIP_FILE_NAMES:
         return True
+    # Skip every `.env` flavor (.env, .env.local, .env.production, …), not just
+    # the exact ".env" name — they all carry secrets.
+    if path.name == ".env" or path.name.startswith(".env."):
+        return True
     if path.suffix in SKIP_FILE_SUFFIXES:
         return True
-    if len(parts) == 2 and parts[0] == "config":
-        # Transfer example configs only. Real config/*.yaml files can contain
-        # personal sources, paths, or work-only vocabulary.
-        return path.suffix == ".yaml" and not path.name.endswith(".example.yaml")
+    if parts and parts[0] == "config":
+        # Transfer example configs only, at ANY nesting depth. Real config files
+        # — including nested per-purpose ones at config/<name>/signal-loom.yaml —
+        # can contain personal sources, paths, or work-only vocabulary.
+        return path.suffix in (".yaml", ".yml") and not path.name.endswith(".example.yaml")
     return False
 
 

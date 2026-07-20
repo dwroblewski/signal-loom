@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project ${PLUGIN_ROOT} python ${PLUGIN_ROOT}/hooks/scripts/bootstrap.py --check-only"
+            "command": "uv run --project \"${PLUGIN_ROOT}\" python \"${PLUGIN_ROOT}/hooks/scripts/bootstrap.py\" --check-only"
           }
         ]
       }

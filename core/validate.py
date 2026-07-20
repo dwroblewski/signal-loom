@@ -164,6 +164,16 @@ def check(d: Any, vocabulary: set[str]) -> tuple[bool, list[str]]:
                     f"characters, got {len(value)}"
                 )
 
+        # max_len (strings) — reject here so an over-long summary FAILS validation
+        # and gets retried/queued, instead of passing check() and then being
+        # silently dropped by sanitize() (leaving the file enriched with no summary).
+        if "max_len" in spec and isinstance(value, str):
+            if len(value) > spec["max_len"]:
+                errors.append(
+                    f"Field '{field}' is too long: maximum {spec['max_len']} "
+                    f"characters, got {len(value)}"
+                )
+
         # max_items (lists)
         if "max_items" in spec and isinstance(value, list):
             if len(value) > spec["max_items"]:
@@ -196,7 +206,15 @@ def check(d: Any, vocabulary: set[str]) -> tuple[bool, list[str]]:
         primary = topics.get("primary", [])
         if isinstance(primary, list):
             for term in primary:
-                if term not in vocabulary:
+                # A non-string element (e.g. YAML parsed `- AI: alignment` into a
+                # dict) is unhashable — guard BEFORE the set-membership test so it
+                # is reported as invalid rather than raising TypeError and
+                # crashing the writeback CLI with no retry.
+                if not isinstance(term, str):
+                    errors.append(
+                        f"topics.primary item {term!r} is not a string"
+                    )
+                elif term not in vocabulary:
                     errors.append(
                         f"topics.primary item '{term}' not in vocab"
                     )

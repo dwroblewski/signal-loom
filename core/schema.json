@@ -3,7 +3,7 @@
   "optional_fields": ["key_takeaways"],
   "field_specs": {
     "enriched": {"type": "bool", "const": true},
-    "summary": {"type": "str", "min_len": 200},
+    "summary": {"type": "str", "min_len": 200, "max_len": 20000},
     "topics": {"type": "dict", "subkeys": {"primary": "list", "secondary": "list"}},
     "entities": {"type": "dict", "subkeys": {"organizations": "list", "people": "list"}},
     "key_takeaways": {"type": "list", "max_items": 7}

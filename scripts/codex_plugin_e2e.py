@@ -168,7 +168,7 @@ def clean_codex_env(zdotdir: Path) -> dict[str, str]:
 
 
 def expected_config_files(install_root: Path) -> list[Path]:
-    """Return config files that hook or lazy bootstrap should create."""
+    """Return the config files a scaffold must produce for the e2e."""
     return [
         install_root / "config/signal-loom.yaml",
         install_root / "config/sources.yaml",
@@ -177,15 +177,26 @@ def expected_config_files(install_root: Path) -> list[Path]:
     ]
 
 
-def remove_bootstrapped_configs(install_root: Path) -> None:
-    """Remove generated config files so hook bootstrap can be observed."""
-    for path in expected_config_files(install_root):
-        path.unlink(missing_ok=True)
+def scaffold_config(install_root: Path, env: dict[str, str]) -> None:
+    """Scaffold a config into the installed plugin root via `core.init`.
 
-
-def hook_bootstrap_observed(install_root: Path) -> bool:
-    """Return True when all expected config files exist."""
-    return all(path.exists() for path in expected_config_files(install_root))
+    Signal-loom no longer auto-bootstraps config at runtime or in the
+    SessionStart hook (v0.3.x); config must be created explicitly. The enrich
+    phase runs with cwd=install_root, so the walk-up resolver discovers
+    ``install_root/config/signal-loom.yaml`` (legacy layout → output lands in
+    ``install_root/content`` and ``install_root/index.json``).
+    """
+    config_dir = install_root / "config"
+    run(
+        [
+            "uv", "run", "--project", str(install_root),
+            "python", "-m", "core.init", "--to", str(config_dir), "--force",
+        ],
+        env=env,
+    )
+    missing = [p for p in expected_config_files(install_root) if not p.exists()]
+    if missing:
+        raise E2EError(f"core.init did not scaffold expected config file(s): {missing}")
 
 
 def write_fixture_article(install_root: Path) -> Path:
@@ -312,11 +323,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--marketplace-name", default=DEFAULT_MARKETPLACE)
     parser.add_argument("--keep", action="store_true", help="keep temp marketplace/cache for debugging")
     parser.add_argument(
-        "--require-hook",
-        action="store_true",
-        help="fail if Codex SessionStart plugin hooks do not bootstrap config files",
-    )
-    parser.add_argument(
         "--codex-timeout",
         type=int,
         default=600,
@@ -333,7 +339,6 @@ def main(argv: list[str] | None = None) -> int:
     marketplace_root = Path(tempfile.mkdtemp(prefix=f"{args.marketplace_name}-marketplace-"))
     zdotdir = Path(tempfile.mkdtemp(prefix=f"{args.marketplace_name}-zdotdir-"))
     raw_file = Path(tempfile.gettempdir()) / f"{args.marketplace_name}-raw.yaml"
-    hook_output = Path(tempfile.gettempdir()) / f"{args.marketplace_name}-hook.txt"
     enrich_output = Path(tempfile.gettempdir()) / f"{args.marketplace_name}-enrich.txt"
     installed_root: Path | None = None
     cleanup_cache = Path.home() / ".codex/plugins/cache" / args.marketplace_name
@@ -350,17 +355,15 @@ def main(argv: list[str] | None = None) -> int:
         installed_root = parse_install_root(add_result.stdout + add_result.stderr)
         summary["installed_root"] = str(installed_root)
 
-        remove_bootstrapped_configs(installed_root)
-        hook_prompt = "Do not run any shell commands. Reply exactly: hook smoke done."
-        run(codex_exec_args(hook_output, repo_root, hook_prompt), env=env, timeout=args.codex_timeout)
-        hook_ok = hook_bootstrap_observed(installed_root)
-        summary["hook_bootstrap"] = hook_ok
-        if args.require_hook and not hook_ok:
-            raise E2EError("Codex plugin SessionStart hook did not bootstrap config files")
+        # v0.3.x: no runtime/hook auto-bootstrap — scaffold config explicitly.
+        scaffold_config(installed_root, env)
+        summary["config_scaffolded"] = True
 
         article = write_fixture_article(installed_root)
         prompt = build_enrich_prompt(installed_root, article, raw_file)
-        run(codex_exec_args(enrich_output, repo_root, prompt), env=env, timeout=args.codex_timeout)
+        # cwd=installed_root so the walk-up resolver discovers the scaffolded
+        # config/signal-loom.yaml (the plugin cache is a granted --add-dir root).
+        run(codex_exec_args(enrich_output, installed_root, prompt), env=env, timeout=args.codex_timeout)
         summary.update(verify_codex_final(enrich_output))
         summary.update(verify_install_outputs(installed_root))
         print(json.dumps(summary, indent=2, sort_keys=True))

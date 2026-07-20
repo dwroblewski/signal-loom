@@ -13,11 +13,25 @@ Golden fixture data (from tests/fixtures/golden/index.json):
 """
 
 import json
+import socket
 from pathlib import Path
 
 import pytest
 
 from core import brief
+from core import fetch as _fetch
+
+
+@pytest.fixture(autouse=True)
+def _stub_dns(monkeypatch):
+    """Resolve every host to a fixed PUBLIC IP so the SSRF guard's real
+    getaddrinfo call never touches the network. Keeps these verify tests
+    deterministic offline / in no-egress CI (the guard fails CLOSED on DNS
+    failure, which would otherwise mark every golden URL 'blocked')."""
+    def fake_getaddrinfo(host, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(_fetch.socket, "getaddrinfo", fake_getaddrinfo)
 
 
 def _golden_urls() -> list[str]:
@@ -215,3 +229,30 @@ def test_brief_verify_follow_redirects_false(tmp_path, httpx_mock):
     assert status.get(public_url) == "live", (
         f"301 with follow_redirects=False must classify as 'live', got: {status.get(public_url)!r}"
     )
+
+
+def test_render_escapes_title_and_drops_unsafe_url(tmp_path):
+    """Scraped titles/URLs are untrusted: a crafted title must not break out of
+    the [title](url) link, and a javascript: URL must not render as a link."""
+    idx = {
+        "entries": [
+            {
+                "path": "x.md",
+                "title": "Update](https://evil.example/phish) [x",
+                "source": "s",
+                "url": "javascript:alert(1)",
+                "published": "2026-05-22",
+                "topics": {"primary": ["ai agents"], "secondary": []},
+                "summary": "y" * 10,
+                "enriched": True,
+            }
+        ],
+        "generated": "2026-05-22T00:00:00Z",
+    }
+    p = tmp_path / "index.json"
+    p.write_text(json.dumps(idx))
+    md = brief.build(p, since="2026-01-01", verify=False)
+    # The forged link's URL must not appear as an active markdown link target.
+    assert "](https://evil.example/phish)" not in md
+    # The javascript: URL is dropped — title renders as plain (escaped) text.
+    assert "javascript:alert(1)" not in md

@@ -147,10 +147,36 @@ def _needs_enrichment(path: Path) -> bool:
         return True
 
 
-def _append_failed_queue(path: Path, errors: list[str]) -> None:
-    """Append a failed enrichment entry to failed-enrichments.jsonl."""
-    queue_path = enrichment_writeback._FAILED_QUEUE
+def _throttle_wait(throttle_last_fetch: dict[str, float], src) -> str | None:
+    """Space same-throttle_group sources by ``src.throttle_seconds``.
+
+    Sleeps if the group was fetched less than ``throttle_seconds`` ago, then
+    returns the active group name (so the caller can stamp the completion time),
+    or ``None`` when the source has no throttle. Used by BOTH the real scrape
+    loop and ``--dry-run`` — dry-run fetches feeds too, so it must throttle or it
+    re-hammers rate-limited hosts (e.g. reddit.com) exactly as commit 3ae01f1
+    set out to prevent.
+    """
+    group = src.throttle_group if src.throttle_seconds > 0 else None
+    if group:
+        last_fetch = throttle_last_fetch.get(group)
+        if last_fetch is not None:
+            wait_seconds = src.throttle_seconds - (time.monotonic() - last_fetch)
+            if wait_seconds > 0:
+                logger.info(
+                    "throttling group %s for %.1fs before %s",
+                    src.throttle_group,
+                    wait_seconds,
+                    src.name,
+                )
+                time.sleep(wait_seconds)
+    return group
+
+
+def _append_failed_queue(path: Path, errors: list[str], queue_path: Path) -> None:
+    """Append a failed enrichment entry to the re-run queue at *queue_path*."""
     try:
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
         with queue_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps({"path": str(path), "errors": errors}) + "\n")
     except OSError as exc:
@@ -245,6 +271,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.error("failed to load settings from %s: %s", config_path, exc)
         return 1
 
+    # Failed-enrichment queue lands beside the resolved config root (same place
+    # the writeback CLI uses), NOT the process CWD — a cron run with CWD=$HOME
+    # would otherwise strand failure records where /enrich never looks.
+    failed_queue_path = enrichment_writeback.default_failed_queue_path(config_path)
+
     try:
         sources = resolve_source_output_dirs(
             load_sources(settings.sources_path),
@@ -269,7 +300,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # #7 empty vocab fail-fast — check BEFORE any scraping/enriching
     if not vocabulary:
         print(
-            f"config/topics.yaml has no topics — add at least one",
+            f"{settings.topics_path} has no topics — add at least one",
             file=sys.stderr,
         )
         return 1
@@ -313,8 +344,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         total_items = 0
         for src in sources:
             logger.info("dry-run: checking source: %s (%s)", src.name, src.type)
+            throttle_group = None
             try:
                 if src.type == "rss":
+                    throttle_group = _throttle_wait(throttle_last_fetch, src)
                     _feed_fn = fetch_feed_fn or scrape_mod._default_fetch_feed
                     parsed = _feed_fn(src.feed_url)
                     entries = getattr(parsed, "entries", []) or []
@@ -331,26 +364,16 @@ def main(argv: Optional[list[str]] = None) -> int:
                     print(f"  {src.name}: unsupported type '{src.type}' — would skip")
             except Exception as exc:
                 print(f"  {src.name}: feed fetch error — {exc}")
+            finally:
+                if throttle_group:
+                    throttle_last_fetch[throttle_group] = time.monotonic()
         print(f"\ndry-run summary: {len(sources)} source(s), ~{total_items} total item(s) would be scraped")
         return 0
 
     for src in sources:
         logger.info("scraping source: %s (%s)", src.name, src.type)
-        throttle_group = src.throttle_group if src.throttle_seconds > 0 else None
+        throttle_group = _throttle_wait(throttle_last_fetch, src)
         try:
-            if throttle_group:
-                last_fetch = throttle_last_fetch.get(throttle_group)
-                if last_fetch is not None:
-                    elapsed = time.monotonic() - last_fetch
-                    wait_seconds = src.throttle_seconds - elapsed
-                    if wait_seconds > 0:
-                        logger.info(
-                            "throttling group %s for %.1fs before %s",
-                            src.throttle_group,
-                            wait_seconds,
-                            src.name,
-                        )
-                        time.sleep(wait_seconds)
             new_files = scrape_mod.run_source(
                 src,
                 fetch_feed=fetch_feed_fn,
@@ -447,11 +470,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                             result.errors,
                         )
                         # #13 append to failed-enrichments.jsonl queue
-                        _append_failed_queue(path, result.errors)
+                        _append_failed_queue(path, result.errors, failed_queue_path)
                         failed_queue_written = True
                 except Exception as exc:
                     logger.warning("enrichment error for %s: %s", path, exc)
-                    _append_failed_queue(path, [str(exc)])
+                    _append_failed_queue(path, [str(exc)], failed_queue_path)
                     failed_queue_written = True
 
             logger.info(
@@ -469,7 +492,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if failed_queue_written:
         logger.info(
             "pipeline: some enrichments failed — re-run queue written to %s",
-            enrichment_writeback._FAILED_QUEUE,
+            failed_queue_path,
         )
 
     # ------------------------------------------------------------------ #

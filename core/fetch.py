@@ -81,6 +81,10 @@ class BlockedURLError(Exception):
     """
 
 
+class ResponseTooLarge(Exception):
+    """Raised when a streamed response body exceeds the size cap."""
+
+
 # ---------------------------------------------------------------------------
 # SSRF egress guard
 # ---------------------------------------------------------------------------
@@ -105,9 +109,9 @@ def _assert_safe_url(url: str) -> None:
       - Any resolved IP address is private, loopback, link-local, reserved,
         or multicast.
 
-    On DNS resolution failure the guard fails OPEN (logs a warning and
-    returns without raising) so that test environments with mocked hostnames
-    that do not resolve in real DNS are not broken.
+    On DNS resolution failure the guard fails CLOSED (raises BlockedURLError):
+    an unresolvable hostname cannot be verified as safe, so we refuse rather
+    than allow blindly.
     """
     try:
         parsed = urlparse(url)
@@ -199,6 +203,39 @@ _BLOCKED_URL_HOSTS = (
 _MAX_REDIRECTS = 5
 
 
+def stream_get_capped(
+    client: "httpx.Client",
+    url: str,
+    *,
+    max_bytes: int = _MAX_RESPONSE_BYTES,
+) -> tuple["httpx.Response", bytes]:
+    """Streaming GET that enforces *max_bytes* WITHOUT buffering the whole body.
+
+    Returns ``(response, body_bytes)``. The response is read incrementally and
+    the transfer is aborted the instant the cap is exceeded, so a hostile server
+    streaming gigabytes can no longer exhaust memory before the size check runs
+    (the flaw in the old ``client.get()`` + ``len(resp.content)`` pattern).
+
+    Redirects and error statuses (>=400, e.g. 429) return ``(response, b"")``
+    without reading a body, so the caller can follow redirects or handle retries
+    off the headers. Raises :class:`ResponseTooLarge` when the cap is exceeded.
+    The returned response is closed; only its status/headers remain usable.
+    """
+    with client.stream("GET", url) as resp:
+        if resp.is_redirect or resp.status_code >= 400:
+            return resp, b""
+        total = 0
+        chunks: list[bytes] = []
+        for chunk in resp.iter_bytes():
+            total += len(chunk)
+            if total > max_bytes:
+                raise ResponseTooLarge(
+                    f"{url}: response exceeds {max_bytes} bytes — aborted mid-stream."
+                )
+            chunks.append(chunk)
+        return resp, b"".join(chunks)
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -222,10 +259,15 @@ def fetch_article_direct(url: str, timeout: int = 15) -> Optional[str]:
         return None
 
     try:
+        html: str | None = None
         with httpx.Client(follow_redirects=False, timeout=timeout, headers={"User-Agent": _BROWSER_UA}) as client:
             current_url = url
             for _ in range(_MAX_REDIRECTS + 1):
-                resp = client.get(current_url)
+                try:
+                    resp, body = stream_get_capped(client, current_url)
+                except ResponseTooLarge as exc:
+                    logger.warning("fetch_article_direct: %s — skipping.", exc)
+                    return None
                 if resp.is_redirect:
                     location = resp.headers.get("location", "")
                     if not location:
@@ -240,20 +282,15 @@ def fetch_article_direct(url: str, timeout: int = 15) -> Optional[str]:
                     current_url = next_url
                     continue
                 resp.raise_for_status()
-                # Response size cap: reject bodies > 10 MB.
-                if len(resp.content) > _MAX_RESPONSE_BYTES:
-                    logger.warning(
-                        "fetch_article_direct: response for %s exceeds 10 MB (%d bytes) — skipping.",
-                        url,
-                        len(resp.content),
-                    )
-                    return None
-                html = resp.text
+                html = body.decode(resp.encoding or "utf-8", errors="replace")
                 break
             else:
                 logger.warning("fetch_article_direct: too many redirects for %s", url)
                 return None
 
+        if html is None:
+            # Redirect chain ended on a redirect with no Location header.
+            return None
         text = trafilatura.extract(html, include_comments=False, include_tables=True)
         return text or None
     except (httpx.HTTPError, httpx.TimeoutException) as exc:
@@ -420,10 +457,12 @@ def is_usable_content(content: str, min_body_words: int = 200) -> bool:
     return classify_content(content, min_body_words) != "stub"
 
 
-def parse_feed(xml_text: str) -> feedparser.FeedParserDict:
-    """Parse RSS/Atom XML text with feedparser.
+def parse_feed(xml_text: str | bytes) -> feedparser.FeedParserDict:
+    """Parse RSS/Atom XML with feedparser.
 
     Pure function — no network I/O. Network fetching of feeds belongs in
-    scrape.py. Accepts the raw XML string and returns the feedparser result.
+    scrape.py. Accepts the raw XML as ``str`` OR ``bytes``; passing bytes lets
+    feedparser honor the encoding declared in the ``<?xml … encoding=…?>``
+    prolog, which a pre-decoded ``str`` would have already lost.
     """
     return feedparser.parse(xml_text)

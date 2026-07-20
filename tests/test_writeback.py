@@ -32,11 +32,13 @@ def test_parse_validate_normalize_merge(tmp_path):
     assert res.ok and post["enriched"] is True and post["title"] == "T"  # unknown key preserved
 
 
-def test_malformed_retries_then_skips(tmp_path):
+def test_malformed_without_regenerator_skips_after_one_attempt(tmp_path):
+    # No regenerator → retrying re-parses identical input, so apply stops after
+    # the first attempt instead of looping and tripling the error list.
     f = tmp_path / "a.md"
     f.write_text("---\ntitle: T\n---\nbody")
     res = wb.apply(f, "not yaml at all", vocabulary=VOCAB, aliases={}, retries=2)
-    assert not res.ok and res.attempts == 3 and f.read_text().startswith("---\ntitle: T")  # untouched
+    assert not res.ok and res.attempts == 1 and f.read_text().startswith("---\ntitle: T")  # untouched
 
 
 def test_regenerate_retry_succeeds(tmp_path):
@@ -46,10 +48,12 @@ def test_regenerate_retry_succeeds(tmp_path):
 
     def regen():
         calls["n"] += 1
-        return RAW_OK if calls["n"] >= 1 else "garbage"
+        # First regen still returns garbage so the SECOND retry is genuinely
+        # exercised (initial + regen#1 fail, regen#2 succeeds).
+        return RAW_OK if calls["n"] >= 2 else "garbage"
 
     res = wb.apply(f, "garbage", vocabulary=VOCAB, aliases={}, retries=2, regenerate=regen)
-    assert res.ok and frontmatter.load(str(f))["enriched"] is True
+    assert res.ok and calls["n"] == 2 and frontmatter.load(str(f))["enriched"] is True
 
 
 def test_atomic_write_no_partial(tmp_path, monkeypatch):

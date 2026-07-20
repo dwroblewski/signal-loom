@@ -71,11 +71,49 @@ def test_keyword_filter_drops_offtopic(tmp_path, rss_fixture):
     assert result == [], "All items should be filtered out by keyword_filter"
 
 
+def test_file_exists_check_is_date_agnostic(tmp_path):
+    """Dedup must match the same item even when its date prefix differs.
+
+    Regression for the duplication bug: sources without a real publish date
+    (YouTube flat-playlist, dateless RSS) stamp `today`, which changes every run.
+    Keying dedup on the date would re-write the same item as a new file daily.
+    """
+    (tmp_path / "2026-01-01 - Cool Video-abc123.md").write_text("x", encoding="utf-8")
+    # Same stem, DIFFERENT date → still a duplicate.
+    assert scrape._file_exists_check(tmp_path, "2026-07-20", "Cool Video-abc123") is True
+    # Different stem (different URL hash) → not a duplicate.
+    assert scrape._file_exists_check(tmp_path, "2026-01-01", "Cool Video-def456") is False
+
+
+def test_rate_limit_retry_seconds_no_header_uses_fallback():
+    """No Retry-After header → bounded fallback delay, never 0 or unbounded."""
+    assert scrape._rate_limit_retry_seconds(None) == scrape._RATE_LIMIT_RETRY_FALLBACK_SECONDS
+
+
+def test_rate_limit_retry_seconds_caps_large_numeric():
+    """A huge numeric Retry-After is capped so the scraper can't stall for an hour."""
+    assert scrape._rate_limit_retry_seconds("3600") == scrape._RATE_LIMIT_RETRY_MAX_SECONDS
+
+
+def test_rate_limit_retry_seconds_http_date_in_past_is_zero():
+    """An HTTP-date Retry-After already in the past clamps to 0 (no negative sleep)."""
+    assert scrape._rate_limit_retry_seconds("Wed, 21 Oct 2015 07:28:00 GMT") == 0.0
+
+
 def test_default_fetch_feed_retries_429_with_capped_delay(httpx_mock, monkeypatch):
     """A large Retry-After must not stall the scraper indefinitely."""
+    import socket
+    from core import fetch as _fetch
+
     url = "https://example.com/feed.xml"
     sleeps = []
 
+    # Stub DNS so the SSRF guard doesn't do a real lookup (offline/no-egress CI).
+    monkeypatch.setattr(
+        _fetch.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))],
+    )
     monkeypatch.setattr(scrape.time, "sleep", lambda seconds: sleeps.append(seconds))
     httpx_mock.add_response(url=url, status_code=429, headers={"Retry-After": "3600"})
     httpx_mock.add_response(

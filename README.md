@@ -107,9 +107,10 @@ codex exec \
   '$pipeline refresh my sources'
 ```
 
-Current Codex CLI builds may not fire plugin `SessionStart` hooks. The runtime
-commands still lazy-bootstrap `config/*.yaml` from examples before use; the e2e
-harness records whether hook bootstrap was observed.
+Current Codex CLI builds may not fire plugin `SessionStart` hooks. That is fine:
+signal-loom no longer bootstraps config from examples at runtime or in the hook —
+scaffold a project config once with `python -m core.init --to .`, and the walk-up
+resolver discovers it thereafter.
 
 `allow_login_shell=false` narrows Codex shell startup, but it does not replace
 `ZDOTDIR` on this machine; zsh startup can still re-export keys without the
@@ -140,7 +141,7 @@ non-example `config/*.yaml` files. Setup details live in
 Then, in a session:
 
 1. **Set your key** — `export ANTHROPIC_API_KEY=sk-ant-...` (Claude/headless API enrichment runs against the Anthropic API; see [Cost](#cost)).
-2. **Configure your sources** — run `/init` to scaffold `signal-loom.yaml` (plus `sources.yaml`, `topics.yaml`, `entity-aliases.yaml`) in your project; the walk-up resolver finds it automatically, with no env var to set. Edit `sources.yaml` and `topics.yaml` with your own sources and vocabulary. (Config that lives in your project also survives plugin updates.)
+2. **Configure your sources** — run `/signal-loom:init` to scaffold `signal-loom.yaml` (plus `sources.yaml`, `topics.yaml`, `entity-aliases.yaml`) in your project; the walk-up resolver finds it automatically, with no env var to set. (Use the namespaced form — a bare `/init` is Claude Code's built-in CLAUDE.md generator, not this plugin.) Edit `sources.yaml` and `topics.yaml` with your own sources and vocabulary. (Config that lives in your project also survives plugin updates.)
 3. **Run it** — `/pipeline` scrapes new items, asks before enriching (cost-aware), and rebuilds the index. Then `/brief --verify` for a topic-grouped digest with live-link checks.
 
 `uv` must be on your PATH (the bootstrap hook installs deps on first session). Install it: <https://docs.astral.sh/uv/>.
@@ -158,7 +159,7 @@ uv run python -m core.pipeline --once --max-enrich 10  # enrich at most 10 files
 
 Enrichment bills per article — see [Cost](#cost). Run `--no-enrich` first to check your sources work, then add enrichment once you're satisfied. Set `ANTHROPIC_API_KEY` before enriching; the pipeline exits with a clear error if it's unset.
 
-From a cloned repo, config files are auto-created from `*.example.yaml` on first run. From an arbitrary directory, scaffold a project config with `python -m core.init --to .` (or `/init` in Claude Code) and the walk-up resolver finds it automatically — no env var required.
+There is no config auto-creation — scaffold one explicitly with `python -m core.init --to .` (or the `init` skill in Claude Code), then the walk-up resolver finds it automatically from any subdirectory, with no env var required. Running the pipeline without a discoverable config exits with an actionable "run init" error rather than inventing defaults.
 
 Install for headless use with `uv sync` (or `pip install -e .`).
 
@@ -219,6 +220,8 @@ Relative paths are resolved relative to the config file's directory.
 | `scrape_full_content` | no (false) | For `rss`: fetch full article body instead of feed excerpt |
 | `enabled` | no (true) | Set `false` to skip this source without deleting it |
 | `keyword_filter` | no | `{mode: any\|all, include: [str]}` — filter items by keyword match |
+| `throttle_group` | no | Sources sharing a group name are spaced apart in time. Use for multiple feeds on one rate-limited host (e.g. all `reddit-rss`). Requires `throttle_seconds`. |
+| `throttle_seconds` | no (0) | Minimum seconds between fetches of sources in the same `throttle_group`. Both keys must be set for throttling to apply. |
 | `fetch_method` | no (`auto`) | For `listing`: `auto` (direct HTTP first, browser fallback) \| `browser` (always Playwright, requires `uv sync --extra browser`) \| `auto-no-browser` (direct HTTP only) |
 | `listing_link_pattern` | no | Regex to extract article links from the listing page (default: broad path heuristic) |
 

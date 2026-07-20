@@ -23,6 +23,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -117,6 +118,31 @@ _TIER_ICON = {
 }
 
 
+def _md_escape(text: str) -> str:
+    """Escape markdown metacharacters in untrusted scraped text.
+
+    Titles come verbatim from remote feeds. Without escaping, a crafted title
+    like ``x](https://evil/phish) [`` breaks out of the ``[title](url)`` link and
+    forges a second link. Escape the link-structural characters.
+    """
+    for ch in ("\\", "[", "]", "(", ")"):
+        text = text.replace(ch, "\\" + ch)
+    return text
+
+
+def _safe_url(url: str) -> str | None:
+    """Return *url* if it is a safe http(s) link, else None.
+
+    Drops ``javascript:``/``data:``/other non-http(s) schemes (feed ``link``
+    values are attacker-controlled) and neutralizes a ``)`` that would close the
+    markdown link early. Scheme-relative/relative URLs are allowed through.
+    """
+    scheme = (urlparse(url).scheme or "").lower()
+    if scheme and scheme not in ("http", "https"):
+        return None
+    return url.replace(" ", "%20").replace(")", "%29")
+
+
 def _render(
     entries: list[dict[str, Any]],
     *,
@@ -166,7 +192,9 @@ def _render(
                 tier = verification.get(url, "stale")
                 tier_annotation = f" · {_TIER_ICON.get(tier, tier)}"
 
-            link_part = f"[{title}]({url})" if url else title
+            safe_title = _md_escape(title)
+            safe_url = _safe_url(url) if url else None
+            link_part = f"[{safe_title}]({safe_url})" if safe_url else safe_title
             meta = " · ".join(filter(None, [src, pub]))
             bullet = f"- {link_part}{tier_annotation} — {meta}"
             if snippet:
@@ -240,7 +268,7 @@ def last_verification() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _parse_since(value: str) -> str:
+def _parse_date(value: str) -> str:
     """Accept 'Nd' (N days ago) or an ISO date; return an ISO date string."""
     if value.endswith("d") and value[:-1].isdigit():
         days = int(value[:-1])
@@ -305,8 +333,12 @@ def main(argv: list[str] | None = None) -> int:
             # `brief` is a query, not a generator — fall back to "index.json" in
             # cwd so users can ad-hoc inspect indexes without a project config.
             index_path_str = "index.json"
-        except Exception:
-            index_path_str = "index.json"
+        except Exception as exc:
+            # A config EXISTS but failed to load (YAML syntax error, bad value).
+            # Surface it loudly — silently reading ./index.json would serve a
+            # stale root-level index and hide the real problem.
+            print(f"error loading config: {exc}", file=sys.stderr)
+            return 1
 
     # Friendly error if the index file doesn't exist
     index_path = Path(index_path_str)
@@ -318,12 +350,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    since = _parse_since(args.since) if args.since else None
+    since = _parse_date(args.since) if args.since else None
+    until = _parse_date(args.until) if args.until else None
     try:
         md = build(
             index_path_str,
             since=since,
-            until=args.until,
+            until=until,
             verify=args.verify,
             limit=args.limit,
         )

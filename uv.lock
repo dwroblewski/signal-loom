@@ -897,7 +897,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/9e/bd/3704a8c3e0942d711
 
 [[package]]
 name = "signal-loom"
-version = "0.1.0"
+version = "0.3.2"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

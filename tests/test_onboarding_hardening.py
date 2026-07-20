@@ -445,6 +445,54 @@ def test_pipeline_throttle_waits_from_source_completion_time(tmp_path, monkeypat
     assert calls == [("A", 0.0), ("B", 75.0), ("C", 75.0)]
 
 
+def test_pipeline_dry_run_throttles_same_group(tmp_path, monkeypatch):
+    """--dry-run fetches feeds too, so it must throttle same-group sources —
+    otherwise the preview re-hammers a rate-limited host (regression guard for
+    commit 3ae01f1, whose throttle originally covered only the real scrape loop)."""
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "topics.yaml").write_text("- ai agents\n")
+    (tmp_path / "entity-aliases.yaml").write_text("{}\n")
+    (tmp_path / "content").mkdir()
+
+    sources_path = tmp_path / "sources.yaml"
+    sources_path.write_text(
+        "a:\n  name: A\n  type: rss\n  feed_url: https://example.com/a.xml\n"
+        "  output_dir: a\n  throttle_group: reddit-rss\n  throttle_seconds: 10\n"
+        "b:\n  name: B\n  type: rss\n  feed_url: https://example.com/b.xml\n"
+        "  output_dir: b\n  throttle_group: reddit-rss\n  throttle_seconds: 10\n"
+        "c:\n  name: C\n  type: rss\n  feed_url: https://example.com/c.xml\n"
+        "  output_dir: c\n  throttle_group: other-rss\n  throttle_seconds: 10\n"
+    )
+    config_path = tmp_path / "signal-loom.yaml"
+    config_path.write_text(
+        "enrichment_model: claude-sonnet-4-6\n"
+        f"content_dir: {tmp_path / 'content'}\n"
+        f"index_path: {tmp_path / 'index.json'}\n"
+        f"sources_path: {sources_path}\n"
+        f"topics_path: {tmp_path / 'topics.yaml'}\n"
+        f"aliases_path: {tmp_path / 'entity-aliases.yaml'}\n"
+    )
+
+    clock = {"now": 0.0}
+    sleeps: list[float] = []
+    monkeypatch.setattr(pipeline.time, "monotonic", lambda: clock["now"])
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    monkeypatch.setattr(pipeline.time, "sleep", fake_sleep)
+
+    rc = pipeline.main(
+        ["--config", str(config_path), "--once", "--dry-run", "--_inject-fetch", "fixture"]
+    )
+
+    assert rc == 0
+    # Only the second reddit-rss source waits; the other-group source does not.
+    assert sleeps == [10.0]
+
+
 # ---------------------------------------------------------------------------
 # #7 Empty vocab fail-fast
 # ---------------------------------------------------------------------------

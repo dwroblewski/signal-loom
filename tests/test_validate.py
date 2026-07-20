@@ -181,3 +181,22 @@ def test_check_subkey_wrong_type_produces_error():
     bad = {**GOOD, "entities": {"organizations": "not-a-list", "people": []}}
     ok, errs = validate.check(bad, vocabulary=VOCAB)
     assert not ok and any("organizations" in e for e in errs)
+
+
+# ---------------------------------------------------------------------------
+# Regression: unhashable topics.primary element must not crash check()
+# ---------------------------------------------------------------------------
+
+def test_check_unhashable_primary_topic_is_reported_not_raised():
+    """A dict element in topics.primary (from `- AI: alignment` YAML) is
+    unhashable — check() must return an error, never raise TypeError."""
+    bad = {**GOOD, "topics": {"primary": [{"AI Safety": "alignment concerns"}], "secondary": []}}
+    ok, errs = validate.check(bad, vocabulary=VOCAB)
+    assert not ok and any("not a string" in e for e in errs)
+
+
+def test_check_over_long_summary_fails():
+    """An over-long summary must FAIL validation (not pass check then get
+    silently dropped by sanitize, leaving the file enriched with no summary)."""
+    ok, errs = validate.check({**GOOD, "summary": "x" * 20_001}, vocabulary=VOCAB)
+    assert not ok and any("too long" in e for e in errs)

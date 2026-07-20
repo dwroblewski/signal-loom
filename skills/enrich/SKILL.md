@@ -48,16 +48,18 @@ CONFIG_ARG=""
 4. **Hand each raw result to writeback — do not transform it:**
 
    > **Security rule: never interpolate model output into a shell command.**
-   > Write the sub-agent's raw output to a temp file first, then pass the temp
-   > file path to writeback via `--raw-file`. This prevents `$(…)`/backtick
-   > command injection from untrusted model responses.
+   > The sub-agent's output is untrusted; a scraped article can make it contain
+   > `$(…)`/backticks that a shell would execute. So do NOT `printf`/`echo` it
+   > into a command — even inside double quotes, command substitution still runs.
+
+   Instead, write the sub-agent's raw output to a temp file with your **Write
+   tool** (not the shell), then pass that path to writeback via `--raw-file`:
 
    ```bash
-   # Write the raw sub-agent output to a temp file (never echo it into a shell)
-   _tmpfile=$(mktemp)
-   printf '%s' "<raw output from sub-agent>" > "$_tmpfile"
-   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.enrichment_writeback apply "<path/to/file.md>" $CONFIG_ARG --raw-file "$_tmpfile"
-   rm -f "$_tmpfile"
+   # $RAW is the path you just wrote with the Write tool — its CONTENTS are never
+   # placed on a shell command line, so injection is impossible.
+   uv run --project "${CLAUDE_PLUGIN_ROOT}" python -m core.enrichment_writeback apply "<path/to/file.md>" $CONFIG_ARG --raw-file "$RAW"
+   rm -f "$RAW"
    ```
 
    Writeback validates against the schema (dropping any non-allow-listed keys), normalizes entities, and writes atomically. A malformed result is skipped and logged to the re-run queue — never crash the batch.
