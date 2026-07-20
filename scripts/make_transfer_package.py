@@ -227,8 +227,8 @@ This folder is a portable Codex local marketplace and VS Code workspace source.
 
 The package intentionally excludes `.venv`, `.git`, caches, `.env`, generated
 `content/`, `index.json`, `failed-enrichments.jsonl`, and non-example
-`config/*.yaml` files. First run creates editable config files from
-`config/*.example.yaml`.
+`config/*.yaml` files. There is no auto-bootstrap — scaffold a project config
+with `python -m core.init --to .` before the first run.
 """
     (package_root / "README-transfer.md").write_text(readme, encoding="utf-8")
 

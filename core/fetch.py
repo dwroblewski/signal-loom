@@ -457,12 +457,20 @@ def is_usable_content(content: str, min_body_words: int = 200) -> bool:
     return classify_content(content, min_body_words) != "stub"
 
 
-def parse_feed(xml_text: str | bytes) -> feedparser.FeedParserDict:
+def parse_feed(
+    xml_text: str | bytes,
+    *,
+    response_headers: dict | None = None,
+) -> feedparser.FeedParserDict:
     """Parse RSS/Atom XML with feedparser.
 
     Pure function — no network I/O. Network fetching of feeds belongs in
-    scrape.py. Accepts the raw XML as ``str`` OR ``bytes``; passing bytes lets
-    feedparser honor the encoding declared in the ``<?xml … encoding=…?>``
-    prolog, which a pre-decoded ``str`` would have already lost.
+    scrape.py. Accepts the raw XML as ``str`` OR ``bytes``; passing bytes plus
+    *response_headers* lets feedparser apply its full encoding precedence — HTTP
+    ``Content-Type`` charset > ``<?xml … encoding=…?>`` prolog > BOM > autodetect
+    — so feeds that declare their charset in EITHER the HTTP header or the prolog
+    decode correctly. (A pre-decoded ``str`` would have already lost both.)
     """
+    if response_headers is not None:
+        return feedparser.parse(xml_text, response_headers=response_headers)
     return feedparser.parse(xml_text)

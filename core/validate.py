@@ -278,8 +278,10 @@ def sanitize(d: Any) -> dict[str, Any]:
         if type_name and not _matches_type(value, type_name):
             continue  # wrong type — drop entirely
 
-        # Size gate for strings (e.g. summary)
-        if type_name == "str" and len(value) > _SUMMARY_MAX_LEN:
+        # Size gate for strings (e.g. summary) — read the field's max_len from the
+        # schema so it stays in lockstep with check(); falling back to the module
+        # default keeps behavior for fields with no declared max_len.
+        if type_name == "str" and len(value) > spec.get("max_len", _SUMMARY_MAX_LEN):
             continue  # oversized — treat as malformed, drop
 
         # For list fields: enforce max_items (truncate) and element type filter

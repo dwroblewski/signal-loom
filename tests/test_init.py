@@ -116,3 +116,33 @@ def test_init_force_bypasses_existing_nested_config(tmp_path):
 
     assert rc == 0
     assert (tmp_path / "signal-loom.yaml").exists()
+
+
+def test_init_refuses_inside_configured_parent_project(tmp_path, monkeypatch):
+    """Scaffolding in a SUBDIRECTORY of an already-configured project must refuse
+    (the new config would shadow the parent's for the whole subtree)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "work"
+    sub = project / "analysis"
+    sub.mkdir(parents=True)
+    (project / "signal-loom.yaml").write_text("enrichment_model: x\n")
+
+    rc = init_mod.main(["--to", str(sub)])
+
+    assert rc != 0
+    assert not (sub / "signal-loom.yaml").exists()
+
+
+def test_init_does_not_refuse_for_home_global_config(tmp_path, monkeypatch):
+    """A home-global config (~/config/signal-loom.yaml dotfiles) is NOT a wrapping
+    project — init in an unrelated project under $HOME must still succeed."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "signal-loom.yaml").write_text("enrichment_model: x\n")
+    project = tmp_path / "projects" / "newproj"
+    project.mkdir(parents=True)
+
+    rc = init_mod.main(["--to", str(project)])
+
+    assert rc == 0
+    assert (project / "signal-loom.yaml").exists()

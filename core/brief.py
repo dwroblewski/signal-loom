@@ -119,28 +119,40 @@ _TIER_ICON = {
 
 
 def _md_escape(text: str) -> str:
-    """Escape markdown metacharacters in untrusted scraped text.
+    """Escape markdown link/code metacharacters in untrusted scraped text.
 
-    Titles come verbatim from remote feeds. Without escaping, a crafted title
-    like ``x](https://evil/phish) [`` breaks out of the ``[title](url)`` link and
-    forges a second link. Escape the link-structural characters.
+    Titles and summaries come verbatim from remote feeds / model output. Without
+    escaping, a crafted value like ``x](https://evil/phish) [`` breaks out of a
+    ``[text](url)`` link and forges a second one, and a backtick could open a
+    code span. Escaping ``[``/``]`` neutralizes link/image breakout; parens in
+    plain text are harmless and left alone (the URL uses an angle-bracket
+    destination, so it needs no paren encoding).
     """
-    for ch in ("\\", "[", "]", "(", ")"):
+    for ch in ("\\", "`", "[", "]"):
         text = text.replace(ch, "\\" + ch)
     return text
 
 
 def _safe_url(url: str) -> str | None:
-    """Return *url* if it is a safe http(s) link, else None.
+    """Return *url* rendered for a markdown angle-bracket destination, or None.
 
     Drops ``javascript:``/``data:``/other non-http(s) schemes (feed ``link``
-    values are attacker-controlled) and neutralizes a ``)`` that would close the
-    markdown link early. Scheme-relative/relative URLs are allowed through.
+    values are attacker-controlled). The result is meant to be wrapped in
+    ``[text](<...>)`` — the angle-bracket form lets the URL contain parentheses
+    (Wikipedia disambiguation links, etc.) without the ``)``-encoding that would
+    break a bare destination. Only ``<``, ``>`` and whitespace need neutralizing.
+    Scheme-relative/relative URLs are allowed through.
     """
     scheme = (urlparse(url).scheme or "").lower()
     if scheme and scheme not in ("http", "https"):
         return None
-    return url.replace(" ", "%20").replace(")", "%29")
+    return (
+        url.replace("<", "%3C")
+        .replace(">", "%3E")
+        .replace(" ", "%20")
+        .replace("\n", "%0A")
+        .replace("\r", "%0D")
+    )
 
 
 def _render(
@@ -182,8 +194,11 @@ def _render(
             pub = e.get("published") or ""
             summary = e.get("summary") or ""
 
-            # Truncate summary to ~120 chars for a snippet
-            snippet = summary[:120].rstrip()
+            # Truncate summary to ~120 chars for a snippet. Escape it too — the
+            # summary is untrusted model output over scraped text, so it can
+            # carry the same [x](javascript:…) link injection the title escaping
+            # closes. (Escape AFTER truncation so we never split a backslash.)
+            snippet = _md_escape(summary[:120].rstrip())
             if len(summary) > 120:
                 snippet += "…"
 
@@ -194,7 +209,8 @@ def _render(
 
             safe_title = _md_escape(title)
             safe_url = _safe_url(url) if url else None
-            link_part = f"[{safe_title}]({safe_url})" if safe_url else safe_title
+            # Angle-bracket destination so URLs with parens render as valid links.
+            link_part = f"[{safe_title}](<{safe_url}>)" if safe_url else safe_title
             meta = " · ".join(filter(None, [src, pub]))
             bullet = f"- {link_part}{tier_annotation} — {meta}"
             if snippet:

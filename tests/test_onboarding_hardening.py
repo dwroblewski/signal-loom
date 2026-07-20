@@ -904,9 +904,11 @@ def test_pipeline_appends_to_failed_queue_on_writeback_failure(tmp_path, monkeyp
     import core.pipeline as pl_mod
     monkeypatch.setattr(pl_mod, "_FakeEnricher", lambda vocab: BadEnricher())
 
-    # Point the queue to tmp_path so we can find it
-    queue_path = tmp_path / "failed-enrichments.jsonl"
-    monkeypatch.setattr(wb, "_FAILED_QUEUE", queue_path)
+    # The pipeline writes the queue beside the resolved config root
+    # (default_failed_queue_path), NOT a monkeypatched module global — assert the
+    # real location so this test actually covers where the queue lands.
+    queue_path = wb.default_failed_queue_path(Path(config_path))
+    assert queue_path == tmp_path / "failed-enrichments.jsonl"
 
     rc = pipeline.main([
         "--config", config_path,

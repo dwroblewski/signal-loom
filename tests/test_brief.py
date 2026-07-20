@@ -231,28 +231,55 @@ def test_brief_verify_follow_redirects_false(tmp_path, httpx_mock):
     )
 
 
-def test_render_escapes_title_and_drops_unsafe_url(tmp_path):
-    """Scraped titles/URLs are untrusted: a crafted title must not break out of
-    the [title](url) link, and a javascript: URL must not render as a link."""
-    idx = {
-        "entries": [
-            {
-                "path": "x.md",
-                "title": "Update](https://evil.example/phish) [x",
-                "source": "s",
-                "url": "javascript:alert(1)",
-                "published": "2026-05-22",
-                "topics": {"primary": ["ai agents"], "secondary": []},
-                "summary": "y" * 10,
-                "enriched": True,
-            }
-        ],
-        "generated": "2026-05-22T00:00:00Z",
+def _entry(**kw):
+    base = {
+        "path": "x.md", "title": "T", "source": "s", "url": "",
+        "published": "2026-05-22", "topics": {"primary": ["ai agents"], "secondary": []},
+        "summary": "y" * 10, "enriched": True,
     }
+    base.update(kw)
+    return base
+
+
+def _build_md(tmp_path, entries):
     p = tmp_path / "index.json"
-    p.write_text(json.dumps(idx))
-    md = brief.build(p, since="2026-01-01", verify=False)
-    # The forged link's URL must not appear as an active markdown link target.
-    assert "](https://evil.example/phish)" not in md
-    # The javascript: URL is dropped — title renders as plain (escaped) text.
+    p.write_text(json.dumps({"entries": entries, "generated": "2026-05-22T00:00:00Z"}))
+    return brief.build(p, since="2026-01-01", verify=False)
+
+
+def test_render_malicious_title_cannot_break_out_of_link(tmp_path):
+    """A crafted title inside a WELL-FORMED [title](validurl) link must not break
+    out and forge a second link (the real attack, with a valid URL present)."""
+    md = _build_md(tmp_path, [_entry(
+        title="Update](https://evil.example/phish) [click",
+        url="https://good.example/article",
+    )])
+    # The ] that would close the link text is backslash-escaped, so the forged
+    # (…) can't become an active link — the unescaped breakout must be absent.
+    assert "Update](https://evil.example/phish)" not in md
+    assert "Update\\](https://evil.example/phish)" in md  # present but escaped/inert
+    # The legitimate URL still renders as an angle-bracket link.
+    assert "(<https://good.example/article>)" in md
+
+
+def test_render_drops_javascript_url_in_title_and_summary(tmp_path):
+    """javascript: URLs must not render as links — via title OR summary field."""
+    md = _build_md(tmp_path, [_entry(
+        title="X", url="javascript:alert(1)",
+        summary="[click me](javascript:alert(document.cookie)) and more text here",
+    )])
     assert "javascript:alert(1)" not in md
+    # Summary injection is neutralized too: the [ opener is backslash-escaped, so
+    # the unescaped link-opener must not appear (it renders as literal text).
+    assert "[click me](javascript" not in md
+    assert "\\[click me\\]" in md  # present but escaped/inert
+
+
+def test_render_balanced_paren_url_renders_as_valid_link(tmp_path):
+    """A normal URL with balanced parens (Wikipedia disambiguation) must render
+    as a working link — regression guard for the )→%29 breakage."""
+    url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
+    md = _build_md(tmp_path, [_entry(title="Python", url=url)])
+    # Angle-bracket destination keeps the parens intact and balanced.
+    assert f"(<{url}>)" in md
+    assert "%29" not in md

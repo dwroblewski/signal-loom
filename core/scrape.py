@@ -322,9 +322,14 @@ def _run_rss(
             if not _matches_keyword_filter(combined, src.keyword_filter):
                 continue
 
-        # Build filename stem: sanitize + append URL hash to avoid truncation collisions
+        # Build filename stem: sanitize + append a per-item hash so dedup (which
+        # is now date-agnostic) can still tell two same-titled items apart.
+        # Prefer the link; fall back to the RSS guid/id so link-LESS items (a
+        # valid RSS shape) still get a stable per-item discriminator instead of
+        # collapsing to a bare title that would falsely dedup distinct items.
         clean_title = _sanitize_filename(title)
-        url_suffix = f"-{_url_hash(link)}" if link else ""
+        dedup_id = link or getattr(entry, "id", "") or getattr(entry, "guid", "") or ""
+        url_suffix = f"-{_url_hash(dedup_id)}" if dedup_id else ""
         filename_stem = f"{clean_title}{url_suffix}"
 
         # Dedup BEFORE the expensive full-article fetch: everything the dedup key
@@ -554,10 +559,12 @@ def _default_fetch_feed(url: str):  # type: ignore[return]
                 time.sleep(wait_seconds)
                 continue
             resp.raise_for_status()
-            # Pass raw bytes: feedparser then honors the XML prolog's declared
-            # encoding (windows-1251, ISO-8859-1, …) instead of trusting httpx's
-            # HTTP-charset guess, which mangles feeds that omit a charset header.
-            return fetch.parse_feed(body)
+            # Pass raw bytes + the HTTP headers: feedparser then applies its full
+            # encoding precedence (HTTP Content-Type charset > XML prolog encoding
+            # > BOM), so feeds declaring their charset in EITHER place decode
+            # correctly. Passing httpx's pre-decoded resp.text would lose the
+            # prolog; passing bytes alone would lose the HTTP charset.
+            return fetch.parse_feed(body, response_headers=dict(resp.headers))
         raise ValueError(f"Too many redirects fetching feed {url}")
 
 

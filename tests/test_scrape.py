@@ -419,3 +419,52 @@ def test_youtube_adapter_accepts_valid_youtube_url(tmp_path, monkeypatch):
         f"yt-dlp should be called with the valid URL; got: {ytdlp_called}"
     )
     assert result == [], "Empty yt-dlp output → empty result list"
+
+
+def test_run_rss_linkless_items_deduped_by_guid_not_title(tmp_path):
+    """Regression: two DIFFERENT link-less RSS items sharing a title but with
+    distinct guids must both be written — date-agnostic dedup must not collapse
+    them to a bare-title stem."""
+    import types
+    src = _make_rss_src(tmp_path, scrape_limit=5)
+
+    def feed(_):
+        e1 = types.SimpleNamespace(
+            title="Daily Update", link="", id="guid-1",
+            summary="body one " * 40, published="Mon, 19 May 2026 00:00:00 GMT", content=None,
+        )
+        e2 = types.SimpleNamespace(
+            title="Daily Update", link="", id="guid-2",
+            summary="body two " * 40, published="Tue, 20 May 2026 00:00:00 GMT", content=None,
+        )
+        return types.SimpleNamespace(entries=[e1, e2])
+
+    written = scrape.run_source(src, fetch_feed=feed, fetch_article=lambda u: None)
+    assert len(written) == 2, f"distinct link-less items must not collide: {[p.name for p in written]}"
+
+
+def test_default_fetch_feed_honors_http_charset_header(httpx_mock, monkeypatch):
+    """Regression: a feed declaring its charset ONLY in the HTTP Content-Type
+    header (not the XML prolog) must decode correctly — bytes+headers give
+    feedparser the HTTP-charset signal it needs."""
+    import socket
+    from core import fetch as _fetch
+
+    monkeypatch.setattr(
+        _fetch.socket, "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))],
+    )
+    url = "https://example.com/feed.xml"
+    # windows-1251 bytes for 'Привет', no prolog encoding, no BOM.
+    body = (
+        b"<?xml version='1.0'?><rss version='2.0'><channel>"
+        b"<title>\xcf\xf0\xe8\xe2\xe5\xf2</title>"
+        b"<item><title>\xcf\xf0\xe8\xe2\xe5\xf2</title>"
+        b"<link>https://example.com/a</link></item></channel></rss>"
+    )
+    httpx_mock.add_response(
+        url=url, status_code=200, content=body,
+        headers={"Content-Type": "application/rss+xml; charset=windows-1251"},
+    )
+    parsed = scrape._default_fetch_feed(url)
+    assert parsed.feed.get("title") == "Привет"

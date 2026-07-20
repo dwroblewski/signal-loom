@@ -238,11 +238,20 @@ _FAILED_QUEUE = Path("failed-enrichments.jsonl")
 
 
 def default_failed_queue_path(config_path: Path) -> Path:
-    """Return the default failed-enrichment queue beside the active data root."""
+    """Return the default failed-enrichment queue beside the active data root.
+
+    Uses the SAME legacy-``config/``-layout heuristic as
+    ``core.config.load_settings`` (including the $HOME-boundary guard) so the
+    queue lands next to the resolved ``content_dir``/``index_path`` — not one
+    level up — for a project whose root is literally named ``config``.
+    """
+    from core.config import _walkup_boundary
+
     config_path = Path(config_path)
-    if config_path.parent.name == "config":
-        return config_path.parent.parent / _FAILED_QUEUE.name
-    return config_path.parent / _FAILED_QUEUE.name
+    parent = config_path.parent
+    if parent.name == "config" and parent.resolve().parent != _walkup_boundary():
+        return parent.parent / _FAILED_QUEUE.name
+    return parent / _FAILED_QUEUE.name
 
 
 def append_failed_queue(

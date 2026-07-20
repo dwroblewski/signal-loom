@@ -34,7 +34,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from core.config import PACKAGE_CONFIG_DIR, find_existing_configs, _walkup_search
+from core.config import (
+    PACKAGE_CONFIG_DIR,
+    find_existing_configs,
+    _WALKUP_FILENAMES,
+    _walkup_boundary,
+)
 
 # Project root = parent of the `core/` package.
 _PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
@@ -181,7 +186,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         # Also walk UP: scaffolding inside a subdirectory of an already-configured
         # project would write a config that shadows the parent's for the whole
         # subtree. The downward scan above can't see a config in a PARENT.
-        parent_found, _ = _walkup_search(target_dir)
+        #
+        # Start ABOVE target_dir and stop BEFORE the $HOME boundary: a config at
+        # $HOME (or ~/config) is a home-global default, NOT a project wrapping the
+        # target, so it must not make init refuse in every project under $HOME.
+        boundary = _walkup_boundary()
+        cur = target_dir.resolve().parent
+        parent_found: Path | None = None
+        while cur != boundary and cur.parent != cur:
+            for name in _WALKUP_FILENAMES:
+                candidate = cur / name
+                if candidate.is_file():
+                    parent_found = candidate
+                    break
+            if parent_found is not None:
+                break
+            cur = cur.parent
         if parent_found is not None and parent_found.resolve() != target_self.resolve():
             if parent_found.resolve() not in {p.resolve() for p in others}:
                 others.append(parent_found)

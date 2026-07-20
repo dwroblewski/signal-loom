@@ -112,3 +112,30 @@ def test_fetch_article_direct_blocked_on_dns_failure():
     with patch("socket.getaddrinfo", side_effect=socket.gaierror("nxdomain")):
         result = fetch.fetch_article_direct("https://totally-unresolvable-host.example/")
     assert result is None
+
+
+def test_stream_get_capped_aborts_oversize_body(monkeypatch):
+    """The response cap must fire mid-stream (before the whole body is buffered),
+    raising ResponseTooLarge rather than returning a giant body."""
+    import httpx
+    from core import fetch
+
+    class _FakeStream:
+        status_code = 200
+        headers: dict = {}
+        is_redirect = False
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def iter_bytes(self):
+            # Yield more than the cap in chunks; must abort partway.
+            chunk = b"x" * 1_000_000
+            for _ in range(20):  # 20 MB total, cap is 10 MB
+                yield chunk
+
+    class _FakeClient:
+        def stream(self, method, url):
+            return _FakeStream()
+
+    import pytest
+    with pytest.raises(fetch.ResponseTooLarge):
+        fetch.stream_get_capped(_FakeClient(), "https://example.com/big", max_bytes=fetch._MAX_RESPONSE_BYTES)
